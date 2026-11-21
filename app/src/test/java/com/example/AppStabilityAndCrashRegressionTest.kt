@@ -348,17 +348,17 @@ class AppStabilityAndCrashRegressionTest {
         )
         val savedCommercialLookalike = unknownCaller.copy(isKnown = true, displayName = "Bank Helpline")
         val ownerCaller = CallerInfo(
-            phoneNumber = "+919876543210",
-            formattedNumber = "+91 98765 43210",
+            phoneNumber = "+918795989222",
+            formattedNumber = "+91 87959 89222",
             displayName = "Ajay",
             isKnown = true,
             isPriority = true,
             isOwner = true
         )
         val unknownMobile = CallerInfo(
-            phoneNumber = "+919811122334",
-            formattedNumber = "+91 98111 22334",
-            displayName = "Unsaved Personal",
+            phoneNumber = "+918073469203",
+            formattedNumber = "+91 80734 69203",
+            displayName = "Unsaved MINE",
             isKnown = false
         )
 
@@ -486,9 +486,9 @@ class AppStabilityAndCrashRegressionTest {
         val viewModel = LyraMainViewModel(app)
         CallStateManager.onIncomingCall(
             CallerInfo(
-                phoneNumber = "+919876543210",
-                formattedNumber = "+91 98765 43210",
-                displayName = "Ajay",
+                phoneNumber = "+9198795989222",
+                formattedNumber = "+91 87959 89222",
+                displayName = "BOSS",
                 isKnown = true,
                 isOwner = true
             ),
