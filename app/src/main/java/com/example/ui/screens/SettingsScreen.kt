@@ -762,9 +762,19 @@ fun SettingsScreen(
                         }
                     }
 
-                    backupStatus?.let {
+                    backupStatus?.let { statusText ->
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = it, color = colors.acceptColor, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        val statusColor = when {
+                            statusText.contains("failed", ignoreCase = true) ||
+                                statusText.contains("error", ignoreCase = true) ||
+                                statusText.contains("cancelled", ignoreCase = true) ||
+                                statusText.contains("no google account", ignoreCase = true) ||
+                                statusText.contains("not configured", ignoreCase = true) ||
+                                statusText.contains("unavailable", ignoreCase = true) -> colors.declineColor
+                            statusText.endsWith("...") -> colors.primary
+                            else -> colors.acceptColor
+                        }
+                        Text(text = statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }

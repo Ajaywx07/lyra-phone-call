@@ -1,6 +1,8 @@
 package com.example.utils
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -29,6 +31,12 @@ object GoogleAuthHelper {
 
     private const val TAG = "GoogleAuthHelper"
 
+    private tailrec fun Context.findActivity(): Activity? = when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
     private fun resolveServerClientId(context: Context): String {
         val generatedResourceId = context.resources.getIdentifier(
             "default_web_client_id",
@@ -50,7 +58,8 @@ object GoogleAuthHelper {
                 "Google Sign-In is not configured. Add the GOOGLE_WEB_CLIENT_ID secret or a Firebase google-services.json."
             )
         }
-        val credentialManager = CredentialManager.create(activityContext)
+        val uiContext: Context = activityContext.findActivity() ?: activityContext
+        val credentialManager = CredentialManager.create(uiContext)
 
         // Single credential option per request for responsive Credential Manager bottom sheet
         val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(serverClientId)
@@ -62,7 +71,7 @@ object GoogleAuthHelper {
 
         return try {
             val result = credentialManager.getCredential(
-                context = activityContext,
+                context = uiContext,
                 request = request
             )
             authenticateFirebaseWithCredential(result.credential)
@@ -73,8 +82,11 @@ object GoogleAuthHelper {
             Log.w(TAG, "No Google credentials found on device", e)
             GoogleSignInOutcome.Failure("No Google account found on this device. Add a Google account in system settings and try again.")
         } catch (e: GetCredentialException) {
-            Log.e(TAG, "Credential Manager error during Google Sign-In", e)
-            GoogleSignInOutcome.Failure(e.localizedMessage ?: "Google Sign-In failed.")
+            Log.e(TAG, "Credential Manager error during Google Sign-In (${e.type})", e)
+            val detail = e.errorMessage?.toString()?.takeIf { it.isNotBlank() }
+                ?: e.localizedMessage?.takeIf { it.isNotBlank() }
+                ?: "Google Sign-In failed (${e.type})."
+            GoogleSignInOutcome.Failure(detail)
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error during Google Sign-In", e)
             GoogleSignInOutcome.Failure(e.localizedMessage ?: "Unexpected sign-in error.")
