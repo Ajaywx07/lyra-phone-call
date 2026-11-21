@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation Helper for CloudContactBackup
+    function isValidCloudContact(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.phoneNumber is string && data.phoneNumber.size() >= 1 && data.phoneNumber.size() <= 40 &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 40 &&
+             data.priorityContact is bool &&
+             data.ownerContact is bool;
+    }
+
+    // User-scoped cloud contact backups
+    match /users/{userId}/cloud_contacts/{contactId} {
+      allow get: if isSignedIn() && isValidId(userId) && isValidId(contactId) && request.auth.uid == userId;
+
+      allow list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(contactId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'name', 'phoneNumber', 'label', 'priorityContact', 'ownerContact', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'phoneNumber', 'label', 'priorityContact', 'ownerContact', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                       isValidCloudContact(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(contactId) &&
+                       isValidCloudContact(incoming()) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phoneNumber', 'label', 'priorityContact', 'ownerContact', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && isValidId(contactId) && request.auth.uid == userId;
+    }
+  }
+}

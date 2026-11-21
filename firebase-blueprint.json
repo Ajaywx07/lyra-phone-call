@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "CloudContactBackup": {
+      "title": "CloudContactBackup",
+      "description": "Backed up contact entry stored privately under a signed-in user's subcollection.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated Google user who owns this backup entry."
+        },
+        "name": {
+          "type": "string",
+          "description": "Contact display name."
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Formatted phone number string."
+        },
+        "label": {
+          "type": "string",
+          "description": "Contact label such as Mobile, Work, Home, or Priority Contact."
+        },
+        "priorityContact": {
+          "type": "boolean",
+          "description": "Whether the contact is marked as a priority caller in Lyra."
+        },
+        "ownerContact": {
+          "type": "boolean",
+          "description": "Whether this contact represents the device owner."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() when first backed up."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() when updated."
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "phoneNumber",
+        "label",
+        "priorityContact",
+        "ownerContact",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/cloud_contacts/{contactId}": {
+      "schema": {
+        "$ref": "#/entities/CloudContactBackup"
+      },
+      "description": "User-owned cloud backup of contacts and priority caller flags."
+    }
+  }
+}

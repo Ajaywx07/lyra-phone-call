@@ -1,0 +1,6 @@
+{
+  "name": "Lyra",
+  "description": "Lyra Calling Assistant - Personal AI-powered calling assistant with caller ID, call summaries, owner priority, and local-first privacy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
