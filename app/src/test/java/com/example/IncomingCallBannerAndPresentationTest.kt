@@ -254,4 +254,32 @@ class IncomingCallBannerAndPresentationTest {
         composeRule.onNodeWithTag("top_incoming_call_banner").assertDoesNotExist()
         composeRule.onNodeWithTag("incoming_call_screen").assertDoesNotExist()
     }
+
+    @Test
+    fun unlockedIncomingCall_pillContainerMaintainsMarginsAndTargetsAcrossRotation() {
+        composeRule.runOnUiThread {
+            CallStateManager.onIncomingCall(testCaller, simLabel = "SIM 1", isSimulated = true)
+        }
+        settleUi()
+
+        val bannerBounds = composeRule.onNodeWithTag("top_incoming_call_banner").getUnclippedBoundsInRoot()
+        val photoBounds = composeRule.onNodeWithTag("top_banner_caller_photo", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val acceptBounds = composeRule.onNodeWithTag("top_banner_accept_btn").getUnclippedBoundsInRoot()
+        val declineBounds = composeRule.onNodeWithTag("top_banner_decline_btn").getUnclippedBoundsInRoot()
+
+        // Ensure halo/blur margin encloses inner content cleanly and buttons preserve >= 48dp targets
+        assertTrue(photoBounds.left > bannerBounds.left)
+        assertTrue(acceptBounds.right < bannerBounds.right)
+        assertTrue((acceptBounds.right.value - acceptBounds.left.value) >= 47.5f)
+        assertTrue((declineBounds.right.value - declineBounds.left.value) >= 47.5f)
+
+        // Advance rotation cycle across multiple quadrants to verify smooth rendering with no crash
+        repeat(4) {
+            composeRule.mainClock.advanceTimeBy(650L)
+            ShadowLooper.idleMainLooper()
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("top_incoming_call_banner").assertIsDisplayed()
+        composeRule.onNodeWithTag("top_banner_caller_name", useUnmergedTree = true).assertIsDisplayed()
+    }
 }

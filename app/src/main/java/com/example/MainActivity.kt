@@ -201,7 +201,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .statusBarsPadding()
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
                         ) {
                             val caller = currentCaller ?: CallerInfo(
                                 phoneNumber = "",
