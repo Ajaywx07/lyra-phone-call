@@ -61,9 +61,9 @@ class DialerAndSchedulerUiTest {
         // Unlocked incoming call stays on DIALER (banner-only) until user taps banner or screen is locked
         CallStateManager.onIncomingCall(
             CallerInfo(
-                phoneNumber = "+919876543210",
-                formattedNumber = "+91 98765 43210",
-                displayName = "Ajay",
+                phoneNumber = "+918795989222",
+                formattedNumber = "+91 87959 89222",
+                displayName = "BOSS",
                 isKnown = true
             )
         )
