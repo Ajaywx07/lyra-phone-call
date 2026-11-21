@@ -97,6 +97,7 @@ import com.example.ui.components.CapsuleSettingsItem
 import com.example.ui.components.CapsuleStatusChip
 import com.example.ui.components.CapsuleToggle
 import com.example.ui.components.DashboardHeroGraphic
+import com.example.ui.components.liquidGlassPlate
 import com.example.ui.theme.AppThemeStyle
 import com.example.ui.theme.LocalInsideGlassSurface
 import com.example.ui.theme.LyraTheme
@@ -272,20 +273,38 @@ fun ThemeAndDashboardModuleBody(
                 val preview = themeColorsFor(style)
                 val isSelected = appTheme == style
                 val cardColor = if (preview.isGlassStyle) {
-                    Color(0xFF162238)
+                    Color(0x66162642)
                 } else {
                     preview.surface
                 }
                 Surface(
-                    color = cardColor,
+                    color = if (preview.isGlassStyle) Color.Transparent else cardColor,
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(
-                        width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) colors.primary else preview.glassBorder
-                    ),
+                    border = if (preview.isGlassStyle && !isSelected) {
+                        null
+                    } else {
+                        BorderStroke(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) colors.primary else preview.glassBorder
+                        )
+                    },
                     modifier = Modifier
-                        .width(134.dp)
+                        .width(138.dp)
                         .clip(RoundedCornerShape(20.dp))
+                        .then(
+                            if (preview.isGlassStyle) {
+                                Modifier.liquidGlassPlate(
+                                    cornerRadius = 20.dp,
+                                    tintColor = cardColor,
+                                    accentGlow = preview.primary,
+                                    rimWidth = if (isSelected) 1.5.dp else 1.1.dp,
+                                    subtle = !isSelected,
+                                    enableAgslRefraction = false
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
                         .clickable { onSelectAppTheme(style) }
                         .testTag("app_theme_card_${style.key}")
                 ) {

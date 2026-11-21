@@ -94,17 +94,34 @@ fun LyraAmbientBackdrop(
     val colors = LyraTheme.colors
     if (colors.isLight || colors.style == com.example.ui.theme.AppThemeStyle.PURE_AMOLED) return
 
-    val topAlpha = if (colors.isGlassStyle) 0.24f else 0.14f
-    val bottomAlpha = if (colors.isGlassStyle) 0.20f else 0.12f
+    val topAlpha = if (colors.isGlassStyle) 0.30f else 0.14f
+    val bottomAlpha = if (colors.isGlassStyle) 0.24f else 0.12f
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        val topRadius = 190.dp.toPx()
-        val topCenter = Offset(x = size.width - 20.dp.toPx(), y = 60.dp.toPx())
+        if (colors.isGlassStyle) {
+            // Soft oceanic mist behind the floating Liquid Glass capsule header
+            val headerCenter = Offset(x = size.width * 0.24f, y = 46.dp.toPx())
+            val headerRadius = 170.dp.toPx()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0.0f to Color(0xFF0EA5E9).copy(alpha = 0.22f),
+                    0.5f to Color(0xFF38BDF8).copy(alpha = 0.10f),
+                    1.0f to Color.Transparent,
+                    center = headerCenter,
+                    radius = headerRadius
+                ),
+                radius = headerRadius,
+                center = headerCenter
+            )
+        }
+
+        val topRadius = 210.dp.toPx()
+        val topCenter = Offset(x = size.width - 20.dp.toPx(), y = 72.dp.toPx())
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to colors.primary.copy(alpha = topAlpha),
-                0.45f to colors.primary.copy(alpha = topAlpha * 0.45f),
-                0.78f to colors.primary.copy(alpha = topAlpha * 0.12f),
+                0.45f to colors.primary.copy(alpha = topAlpha * 0.48f),
+                0.78f to colors.primary.copy(alpha = topAlpha * 0.14f),
                 1.0f to Color.Transparent,
                 center = topCenter,
                 radius = topRadius
@@ -113,13 +130,13 @@ fun LyraAmbientBackdrop(
             center = topCenter
         )
 
-        val bottomRadius = 210.dp.toPx()
+        val bottomRadius = 230.dp.toPx()
         val bottomCenter = Offset(x = 30.dp.toPx(), y = size.height - 60.dp.toPx())
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to colors.secondary.copy(alpha = bottomAlpha),
                 0.45f to colors.secondary.copy(alpha = bottomAlpha * 0.45f),
-                0.78f to colors.secondary.copy(alpha = bottomAlpha * 0.12f),
+                0.78f to colors.secondary.copy(alpha = bottomAlpha * 0.14f),
                 1.0f to Color.Transparent,
                 center = bottomCenter,
                 radius = bottomRadius
@@ -127,6 +144,22 @@ fun LyraAmbientBackdrop(
             radius = bottomRadius,
             center = bottomCenter
         )
+
+        if (colors.isGlassStyle) {
+            val prismCenter = Offset(x = size.width * 0.85f, y = size.height * 0.72f)
+            val prismRadius = 155.dp.toPx()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0.0f to Color(0xFFF472B6).copy(alpha = 0.11f),
+                    0.55f to Color(0xFF818CF8).copy(alpha = 0.06f),
+                    1.0f to Color.Transparent,
+                    center = prismCenter,
+                    radius = prismRadius
+                ),
+                radius = prismRadius,
+                center = prismCenter
+            )
+        }
     }
 }
 
@@ -140,6 +173,22 @@ fun GlassCard(
 ) {
     val colors = LyraTheme.colors
     val insideGlass = LocalInsideGlassSurface.current
+    if (colors.isGlassStyle) {
+        val accentHint = if (borderColor != colors.glassBorder) borderColor else colors.primary
+        LiquidGlassSurface(
+            modifier = modifier.fillMaxWidth(),
+            shape = shape,
+            cornerRadius = 24.dp,
+            tintColor = if (insideGlass) Color(0x881C2E4A) else Color(0x66132138),
+            accentGlow = accentHint,
+            subtle = insideGlass,
+            enableAgslRefraction = !insideGlass,
+            contentPadding = contentPadding
+        ) {
+            content()
+        }
+        return
+    }
     val resolvedContainer = if (insideGlass && colors.isGlassStyle) {
         colors.surfaceElevated
     } else {
@@ -167,105 +216,162 @@ fun LyraTopBar(
     showBack: Boolean = false,
     onBackClick: () -> Unit = {},
     statusText: String = "● Lyra Online",
-    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+    contentPadding: PaddingValues = PaddingValues(vertical = 8.dp),
     trailingActions: @Composable () -> Unit = {}
 ) {
     val colors = LyraTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(contentPadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
+    val headerContent: @Composable () -> Unit = {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            if (showBack) {
-                Surface(
-                    onClick = onBackClick,
-                    shape = CircleShape,
-                    color = colors.surfaceElevated,
-                    border = BorderStroke(1.dp, colors.glassBorder),
-                    modifier = Modifier
-                        .size(44.dp)
-                        .testTag("top_bar_back_button")
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = colors.primary,
-                            modifier = Modifier.size(20.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (showBack) {
+                    Surface(
+                        onClick = onBackClick,
+                        shape = CircleShape,
+                        color = if (colors.isGlassStyle) Color(0x40FFFFFF).copy(alpha = 0.14f) else colors.surfaceElevated,
+                        border = BorderStroke(
+                            1.dp,
+                            if (colors.isGlassStyle) Color.White.copy(alpha = 0.34f) else colors.glassBorder
+                        ),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("top_bar_back_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = if (colors.isGlassStyle) Color.White else colors.primary,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (colors.isGlassStyle) {
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = 0.22f),
+                                            colors.primary.copy(alpha = 0.20f)
+                                        )
+                                    )
+                                } else {
+                                    Brush.linearGradient(listOf(colors.surfaceElevated, colors.surfaceElevated))
+                                }
+                            )
+                            .border(
+                                1.dp,
+                                if (colors.isGlassStyle) Color.White.copy(alpha = 0.45f) else colors.primary.copy(alpha = 0.4f),
+                                CircleShape
+                            )
+                            .padding(5.dp)
+                            .testTag("top_bar_lyra_logo"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_lyra_logo),
+                            contentDescription = "Lyra Logo",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        color = colors.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.1.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = subtitle,
+                        color = colors.primaryGlow,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (statusText.isNotBlank()) {
+                    Surface(
+                        color = if (colors.isGlassStyle) {
+                            Color.White.copy(alpha = 0.14f)
+                        } else {
+                            colors.primary.copy(alpha = 0.14f)
+                        },
+                        shape = CircleShape,
+                        border = BorderStroke(
+                            1.dp,
+                            if (colors.isGlassStyle) Color.White.copy(alpha = 0.36f) else colors.primary.copy(alpha = 0.42f)
+                        )
+                    ) {
+                        Text(
+                            text = statusText,
+                            color = if (colors.isGlassStyle) colors.primaryGlow else colors.primary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceElevated)
-                        .border(1.dp, colors.primary.copy(alpha = 0.4f), CircleShape)
-                        .padding(5.dp)
-                        .testTag("top_bar_lyra_logo"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_lyra_logo),
-                        contentDescription = "Lyra Logo",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-            }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = colors.textPrimary,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.2.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    color = colors.primaryGlow,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                trailingActions()
             }
         }
+    }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (statusText.isNotBlank()) {
-                Surface(
-                    color = colors.primary.copy(alpha = 0.14f),
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.42f))
-                ) {
-                    Text(
-                        text = statusText,
-                        color = colors.primary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
-                    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(contentPadding)
+    ) {
+        if (colors.isGlassStyle) {
+            LiquidGlassSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = CircleShape,
+                cornerRadius = 32.dp,
+                tintColor = Color(0x6E152540),
+                accentGlow = colors.primary,
+                rimWidth = 1.25.dp,
+                enableAgslRefraction = true,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                headerContent()
+            }
+        } else {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = if (colors.isLight) colors.surface else colors.glassSurface,
+                border = BorderStroke(1.dp, colors.glassBorder)
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    headerContent()
                 }
             }
-
-            trailingActions()
         }
     }
 }

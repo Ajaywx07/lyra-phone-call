@@ -93,6 +93,22 @@ fun OuterCapsuleContainer(
 ) {
     val colors = LyraTheme.colors
     val insideGlass = LocalInsideGlassSurface.current
+    if (colors.isGlassStyle) {
+        LiquidGlassSurface(
+            modifier = modifier.fillMaxWidth(),
+            shape = CircleShape,
+            cornerRadius = 32.dp,
+            tintColor = Color(0x6B14223B),
+            accentGlow = colors.primary,
+            rimWidth = 1.15.dp,
+            subtle = insideGlass,
+            enableAgslRefraction = !insideGlass,
+            contentPadding = contentPadding
+        ) {
+            content()
+        }
+        return
+    }
     val resolvedColor = if (insideGlass && colors.isGlassStyle && containerColor == colors.glassSurface) {
         colors.surfaceElevated
     } else {
@@ -201,16 +217,37 @@ fun CapsuleSearchBar(
     testTag: String = "capsule_search_input"
 ) {
     val colors = LyraTheme.colors
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 50.dp),
-        shape = CircleShape,
-        color = colors.surfaceElevated,
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (query.isNotBlank()) colors.primary.copy(alpha = 0.55f) else colors.glassBorder
+    val searchModifier = modifier
+        .fillMaxWidth()
+        .defaultMinSize(minHeight = 50.dp)
+        .then(
+            if (colors.isGlassStyle) {
+                Modifier
+                    .clip(CircleShape)
+                    .liquidGlassPlate(
+                        cornerRadius = 26.dp,
+                        tintColor = Color(0x72162642),
+                        accentGlow = if (query.isNotBlank()) colors.primary else colors.secondary,
+                        rimWidth = 1.1.dp,
+                        subtle = true,
+                        enableAgslRefraction = false
+                    )
+            } else {
+                Modifier
+            }
         )
+    Surface(
+        modifier = searchModifier,
+        shape = CircleShape,
+        color = if (colors.isGlassStyle) Color.Transparent else colors.surfaceElevated,
+        border = if (colors.isGlassStyle) {
+            null
+        } else {
+            BorderStroke(
+                width = 1.dp,
+                color = if (query.isNotBlank()) colors.primary.copy(alpha = 0.55f) else colors.glassBorder
+            )
+        }
     ) {
         Row(
             modifier = Modifier
@@ -283,93 +320,15 @@ fun CapsuleTopHeader(
     trailingActions: @Composable () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val colors = LyraTheme.colors
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            if (showBack) {
-                Surface(
-                    onClick = onBackClick,
-                    shape = CircleShape,
-                    color = colors.surfaceElevated,
-                    border = BorderStroke(1.dp, colors.glassBorder),
-                    modifier = Modifier
-                        .size(44.dp)
-                        .testTag("top_bar_back_button")
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = colors.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceElevated)
-                        .border(1.dp, colors.primary.copy(alpha = 0.4f), CircleShape)
-                        .padding(5.dp)
-                        .testTag("top_bar_lyra_logo"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_lyra_logo),
-                        contentDescription = "Lyra Logo",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = colors.textPrimary,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.1.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    color = colors.primaryGlow,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (!statusText.isNullOrBlank()) {
-                CapsuleStatusChip(
-                    text = statusText,
-                    color = colors.primary
-                )
-            }
-            trailingActions()
-        }
-    }
+    LyraTopBar(
+        title = title,
+        subtitle = subtitle,
+        showBack = showBack,
+        onBackClick = onBackClick,
+        statusText = statusText.orEmpty(),
+        contentPadding = PaddingValues(vertical = 8.dp),
+        trailingActions = trailingActions
+    )
 }
 
 /**
@@ -446,6 +405,20 @@ fun RecentCallCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
+            .then(
+                if (colors.isGlassStyle) {
+                    Modifier.liquidGlassPlate(
+                        cornerRadius = 20.dp,
+                        tintColor = Color(0x6215233B),
+                        accentGlow = if (isMissedOrRejected) colors.declineColor else colors.primary,
+                        rimWidth = 1.05.dp,
+                        subtle = true,
+                        enableAgslRefraction = false
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .combinedClickable(
                 onClick = onItemClick,
                 onLongClick = {
@@ -455,12 +428,16 @@ fun RecentCallCard(
             )
             .testTag("call_history_item_${item.id}"),
         shape = RoundedCornerShape(20.dp),
-        color = colors.glassSurface,
+        color = if (colors.isGlassStyle) Color.Transparent else colors.glassSurface,
         shadowElevation = 0.dp,
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isMissedOrRejected) colors.declineColor.copy(alpha = 0.28f) else colors.glassBorder
-        )
+        border = if (colors.isGlassStyle) {
+            null
+        } else {
+            BorderStroke(
+                width = 1.dp,
+                color = if (isMissedOrRejected) colors.declineColor.copy(alpha = 0.28f) else colors.glassBorder
+            )
+        }
     ) {
         Row(
             modifier = Modifier
@@ -612,6 +589,24 @@ fun ContactCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
+            .then(
+                if (colors.isGlassStyle) {
+                    Modifier.liquidGlassPlate(
+                        cornerRadius = 20.dp,
+                        tintColor = Color(0x6215233B),
+                        accentGlow = when {
+                            contact.isOwner -> colors.primary
+                            contact.isPriority -> AmberPriority
+                            else -> colors.primary
+                        },
+                        rimWidth = 1.05.dp,
+                        subtle = true,
+                        enableAgslRefraction = false
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .combinedClickable(
                 onClick = onContactClick,
                 onLongClick = {
@@ -621,16 +616,20 @@ fun ContactCard(
             )
             .testTag("contact_item_${contact.id}"),
         shape = RoundedCornerShape(20.dp),
-        color = colors.glassSurface,
+        color = if (colors.isGlassStyle) Color.Transparent else colors.glassSurface,
         shadowElevation = 0.dp,
-        border = BorderStroke(
-            width = 1.dp,
-            color = when {
-                contact.isOwner -> colors.primary.copy(alpha = 0.45f)
-                contact.isPriority -> AmberPriority.copy(alpha = 0.35f)
-                else -> colors.glassBorder
-            }
-        )
+        border = if (colors.isGlassStyle) {
+            null
+        } else {
+            BorderStroke(
+                width = 1.dp,
+                color = when {
+                    contact.isOwner -> colors.primary.copy(alpha = 0.45f)
+                    contact.isPriority -> AmberPriority.copy(alpha = 0.35f)
+                    else -> colors.glassBorder
+                }
+            )
+        }
     ) {
         Row(
             modifier = Modifier
@@ -804,6 +803,23 @@ fun CapsuleSettingsGroup(
 ) {
     val colors = LyraTheme.colors
     val insideGlass = LocalInsideGlassSurface.current
+    if (colors.isGlassStyle) {
+        LiquidGlassSurface(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            cornerRadius = 24.dp,
+            tintColor = if (insideGlass) Color(0x881B2C47) else Color(0x6814223A),
+            accentGlow = if (borderColor != colors.glassBorder) borderColor else colors.primary,
+            subtle = insideGlass,
+            enableAgslRefraction = !insideGlass,
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                content()
+            }
+        }
+        return
+    }
     val resolvedColor = if (insideGlass && colors.isGlassStyle) {
         colors.surfaceElevated
     } else {

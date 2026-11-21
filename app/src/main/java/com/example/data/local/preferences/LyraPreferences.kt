@@ -107,7 +107,7 @@ class LyraPreferences(private val context: Context) {
                 showContactPhotoOnCall = preferences[KEY_SHOW_CONTACT_PHOTO_ON_CALL] ?: true,
                 blockUnknownCalls = preferences[KEY_BLOCK_UNKNOWN_CALLS] ?: false,
                 blockCommercialPrefixes = preferences[KEY_BLOCK_COMMERCIAL_PREFIXES] ?: false,
-                themeMode = preferences[KEY_THEME_MODE] ?: "LYRA_CYBER"
+                themeMode = preferences[KEY_THEME_MODE] ?: "IOS_GLASS"
             ).also { cachedIncomingSnapshot = it }
         }
 
@@ -184,7 +184,7 @@ class LyraPreferences(private val context: Context) {
     }
 
     val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[KEY_THEME_MODE] ?: "LYRA_CYBER"
+        preferences[KEY_THEME_MODE] ?: "IOS_GLASS"
     }
 
     val autoSendQuickSms: Flow<Boolean> = context.dataStore.data.map { preferences ->

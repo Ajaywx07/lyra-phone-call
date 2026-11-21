@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -105,7 +106,19 @@ fun LyraBottomNavBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(colors.background)
+            .then(
+                if (colors.isGlassStyle) {
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            0.35f to colors.background.copy(alpha = 0.72f),
+                            1.0f to colors.background.copy(alpha = 0.94f)
+                        )
+                    )
+                } else {
+                    Modifier.background(colors.background)
+                }
+            )
             .navigationBarsPadding()
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
@@ -124,17 +137,29 @@ fun LyraBottomNavBar(
                     val isSelected = currentRoute == item.route
 
                     val innerBg by animateColorAsState(
-                        targetValue = if (isSelected) colors.primary.copy(alpha = 0.20f) else Color.Transparent,
+                        targetValue = when {
+                            isSelected && colors.isGlassStyle -> Color.White.copy(alpha = 0.16f)
+                            isSelected -> colors.primary.copy(alpha = 0.20f)
+                            else -> Color.Transparent
+                        },
                         animationSpec = tween(110, easing = FastOutSlowInEasing),
                         label = "nav_capsule_bg"
                     )
                     val innerBorder by animateColorAsState(
-                        targetValue = if (isSelected) colors.primary.copy(alpha = 0.50f) else Color.Transparent,
+                        targetValue = when {
+                            isSelected && colors.isGlassStyle -> Color.White.copy(alpha = 0.42f)
+                            isSelected -> colors.primary.copy(alpha = 0.50f)
+                            else -> Color.Transparent
+                        },
                         animationSpec = tween(110, easing = FastOutSlowInEasing),
                         label = "nav_capsule_border"
                     )
                     val contentTint by animateColorAsState(
-                        targetValue = if (isSelected) colors.primary else colors.textMuted,
+                        targetValue = if (isSelected) {
+                            if (colors.isGlassStyle) colors.primaryGlow else colors.primary
+                        } else {
+                            colors.textMuted
+                        },
                         animationSpec = tween(110, easing = FastOutSlowInEasing),
                         label = "nav_capsule_tint"
                     )

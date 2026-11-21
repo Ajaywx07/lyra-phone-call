@@ -366,7 +366,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
 
     val appTheme: StateFlow<AppThemeStyle> = preferences.themeMode
         .map { AppThemeStyle.fromKey(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppThemeStyle.LYRA_CYBER)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppThemeStyle.IOS_GLASS)
 
     val autoSendQuickSms: StateFlow<Boolean> = preferences.autoSendQuickSms
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

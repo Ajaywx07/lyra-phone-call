@@ -310,7 +310,7 @@ class LyraCallService : Service() {
         val showPhoto = settings?.showContactPhotoOnCall ?: true
         val fullscreenEnabled = settings?.isFullscreenIncomingEnabled ?: true
         val incomingScreenEnabled = settings?.isIncomingScreenEnabled ?: true
-        val appTheme = AppThemeStyle.fromKey(settings?.themeMode ?: AppThemeStyle.LYRA_CYBER.key)
+        val appTheme = AppThemeStyle.fromKey(settings?.themeMode ?: AppThemeStyle.IOS_GLASS.key)
 
         if (snapshot.state == CallStateEnum.RINGING) {
             val caller = snapshot.caller ?: CallerInfo(

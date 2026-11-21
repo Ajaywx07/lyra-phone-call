@@ -120,7 +120,7 @@ data class IncomingCallSettingsSnapshot(
     val showContactPhotoOnCall: Boolean = true,
     val blockUnknownCalls: Boolean = false,
     val blockCommercialPrefixes: Boolean = false,
-    val themeMode: String = "LYRA_CYBER"
+    val themeMode: String = "IOS_GLASS"
 )
 
 data class ContactItemData(

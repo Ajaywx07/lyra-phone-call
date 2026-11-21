@@ -25,12 +25,15 @@ import com.example.domain.model.ContactItemData
 import com.example.service.CallStateManager
 import com.example.ui.components.ContactCard
 import com.example.ui.components.ListItemContextMenuDialog
+import com.example.ui.components.LyraTopBar
 import com.example.ui.screens.ContactDetailsScreen
 import com.example.ui.screens.DialerScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.AppThemeStyle
+import com.example.ui.theme.LyraTheme
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LyraMainViewModel
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -257,5 +260,42 @@ class UiRefinementVerificationTest {
         composeTestRule.onNodeWithTag("context_menu_edit").assertIsDisplayed()
         composeTestRule.onNodeWithTag("context_menu_delete").assertDoesNotExist()
         assertFalse(deleteClicked)
+    }
+
+    @Test
+    fun liquidGlassThemeAndCapsuleHeader_defaultsToIosGlassAndRendersSafely() {
+        var resolvedStyle: AppThemeStyle? = null
+        var isGlassStyle = false
+        var backClicked = false
+
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                resolvedStyle = LyraTheme.colors.style
+                isGlassStyle = LyraTheme.colors.isGlassStyle
+                Column(modifier = Modifier.padding(16.dp)) {
+                    LyraTopBar(
+                        title = "LYRA",
+                        subtitle = "Liquid Glass Header",
+                        statusText = "● Lyra Online",
+                        showBack = false
+                    )
+                    LyraTopBar(
+                        title = "SETTINGS",
+                        subtitle = "Modular Control Center",
+                        showBack = true,
+                        onBackClick = { backClicked = true }
+                    )
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(AppThemeStyle.IOS_GLASS, resolvedStyle)
+        assertTrue(isGlassStyle)
+        assertEquals(AppThemeStyle.IOS_GLASS, AppThemeStyle.entries.first())
+        composeTestRule.onNodeWithTag("top_bar_lyra_logo").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("top_bar_back_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("top_bar_back_button").performClick()
+        assertTrue(backClicked)
     }
 }

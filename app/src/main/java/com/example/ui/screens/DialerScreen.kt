@@ -463,7 +463,7 @@ fun DialerScreen(
             title = "DIALPAD",
             subtitle = "Dual-SIM Phone & Assistant",
             statusText = "● AI Active",
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 3.dp)
         )
 
         Column(

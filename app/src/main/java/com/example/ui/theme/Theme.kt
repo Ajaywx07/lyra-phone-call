@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-val LocalLyraThemeColors = staticCompositionLocalOf { LyraCyberColors }
+val LocalLyraThemeColors = staticCompositionLocalOf { IosGlassColors }
 val LocalInsideGlassSurface = staticCompositionLocalOf { false }
 
 object LyraTheme {
@@ -25,7 +25,7 @@ object LyraTheme {
 
 @Composable
 fun MyApplicationTheme(
-    appThemeStyle: AppThemeStyle = AppThemeStyle.LYRA_CYBER,
+    appThemeStyle: AppThemeStyle = AppThemeStyle.IOS_GLASS,
     content: @Composable () -> Unit
 ) {
     val themeColors = themeColorsFor(appThemeStyle)

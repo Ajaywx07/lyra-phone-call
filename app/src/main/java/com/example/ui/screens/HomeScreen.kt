@@ -142,6 +142,7 @@ fun HomeScreen(
                     title = "LYRA",
                     subtitle = "Personal Calling Assistant",
                     statusText = if (isLyraEnabled) "● Lyra Online" else "○ Standby",
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     trailingActions = {
                         Surface(
                             onClick = onNavigateToSettings,

@@ -38,16 +38,16 @@ enum class AppThemeStyle(
     val subtitle: String,
     val isLight: Boolean
 ) {
+    IOS_GLASS(
+        key = "IOS_GLASS",
+        displayName = "iOS Liquid Glass",
+        subtitle = "SDF refraction & prism rim",
+        isLight = false
+    ),
     LYRA_CYBER(
         key = "LYRA_CYBER",
         displayName = "Lyra Cyber",
         subtitle = "Deep neon cyber HUD",
-        isLight = false
-    ),
-    IOS_GLASS(
-        key = "IOS_GLASS",
-        displayName = "iOS Glass",
-        subtitle = "Frosted slate & Apple blue",
         isLight = false
     ),
     CLASSIC_LIGHT(
@@ -77,7 +77,7 @@ enum class AppThemeStyle(
 
     companion object {
         fun fromKey(key: String?): AppThemeStyle {
-            return entries.firstOrNull { it.key.equals(key, ignoreCase = true) } ?: LYRA_CYBER
+            return entries.firstOrNull { it.key.equals(key, ignoreCase = true) } ?: IOS_GLASS
         }
     }
 }
@@ -133,19 +133,19 @@ val IosGlassColors = LyraThemeColors(
     style = AppThemeStyle.IOS_GLASS,
     isLight = false,
     isGlassStyle = true,
-    background = Color(0xFF090F1D),
-    surface = Color(0xD9121B2E),
-    surfaceElevated = Color(0xFF1A253B),
-    glassSurface = Color(0x661C2B42),
-    glassBorder = Color(0x66DCEBFF),
-    glassBorderPurple = Color(0x55A5B4FC),
+    background = Color(0xFF060B17),
+    surface = Color(0xCC101A2E),
+    surfaceElevated = Color(0xB8182742),
+    glassSurface = Color(0x6615243D),
+    glassBorder = Color(0x88DCEEFF),
+    glassBorderPurple = Color(0x66A78BFA),
     primary = Color(0xFF38BDF8),
     primaryGlow = Color(0xFFBAE6FD),
     primaryMuted = Color(0xFF0284C7),
     secondary = Color(0xFF818CF8),
     secondaryGlow = Color(0xFFC7D2FE),
     textPrimary = Color(0xFFF8FAFC),
-    textSecondary = Color(0xFFDCE7F5),
+    textSecondary = Color(0xFFE2E8F0),
     textMuted = Color(0xFF94A3B8),
     onPrimaryButton = Color.Black,
     onSecondaryButton = Color.White
