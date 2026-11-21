@@ -440,7 +440,12 @@ fun SettingsScreen(
                         callAnimationStyle = callAnimationStyle,
                         onSelectCallAnimationStyle = { viewModel.setCallAnimationStyle(it) },
                         onPreviewIncoming = {
-                            viewModel.simulateIncomingCall(name = ownerName, isOwner = true, isPriority = true)
+                            viewModel.simulateIncomingCall(
+                                name = ownerName,
+                                number = ownerPhone,
+                                isOwner = true,
+                                isPriority = true
+                            )
                             onPreviewIncomingCall()
                         },
                         onPreviewOutgoing = {

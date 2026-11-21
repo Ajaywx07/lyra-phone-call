@@ -8,10 +8,12 @@ import android.content.Context
 import android.os.PowerManager
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.example.domain.model.CallStateEnum
 import com.example.domain.model.CallerInfo
@@ -281,5 +283,35 @@ class IncomingCallBannerAndPresentationTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_incoming_call_banner").assertIsDisplayed()
         composeRule.onNodeWithTag("top_banner_caller_name", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun homeSimulatorPresets_ownerBossAndUnknownMine_renderExpectedBannerDetails() {
+        composeRule.onNodeWithTag("nav_lyra_ai").performClick()
+        settleUi()
+
+        composeRule.onNodeWithTag("home_lazy_column")
+            .performScrollToNode(hasTestTag("simulate_owner_call_btn"))
+        settleUi()
+
+        composeRule.onNodeWithText("Test AI Incoming Call Interface").assertIsDisplayed()
+
+        // Trigger Owner Call preset -> BOSS / 8795989222
+        composeRule.onNodeWithTag("simulate_owner_call_btn").performClick()
+        settleUi()
+
+        composeRule.onNodeWithTag("top_incoming_call_banner").assertIsDisplayed()
+        composeRule.onNodeWithText("BOSS", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("87959 89222", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("top_banner_decline_btn").performClick()
+        settleUi()
+
+        // Trigger Unknown Call preset -> Unknown "Mine" / 8073469203
+        composeRule.onNodeWithTag("simulate_unknown_call_btn").performClick()
+        settleUi()
+
+        composeRule.onNodeWithTag("top_incoming_call_banner").assertIsDisplayed()
+        composeRule.onNodeWithText("Unknown \"Mine\"", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("80734 69203 • Tap to expand", useUnmergedTree = true).assertIsDisplayed()
     }
 }

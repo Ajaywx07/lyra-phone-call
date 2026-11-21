@@ -131,7 +131,8 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .testTag("home_lazy_column"),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -576,7 +577,17 @@ fun HomeScreen(
                                 lineHeight = 16.sp
                             )
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = "Owner: BOSS (8795989222)  •  Unknown: \"Mine\" (8073469203)",
+                                color = colors.primary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -586,7 +597,8 @@ fun HomeScreen(
                                     text = "Owner Call",
                                     onClick = {
                                         viewModel.simulateIncomingCall(
-                                            name = ownerName,
+                                            name = "BOSS",
+                                            number = "8795989222",
                                             isOwner = true,
                                             isPriority = true
                                         )
@@ -603,7 +615,10 @@ fun HomeScreen(
                                     text = "Unknown Call",
                                     accentColor = colors.textPrimary,
                                     onClick = {
-                                        viewModel.simulateUnknownCall()
+                                        viewModel.simulateUnknownCall(
+                                            name = "Unknown \"Mine\"",
+                                            number = "8073469203"
+                                        )
                                         if (NotificationHelper.isDeviceLockedOrScreenOff(context)) {
                                             onNavigateToIncomingCall()
                                         }

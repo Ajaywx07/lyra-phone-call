@@ -765,8 +765,8 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
      * Simulate an incoming phone call to preview call screen styles and animations.
      */
     fun simulateIncomingCall(
-        name: String = "Ajay",
-        number: String = "+91 98765 43210",
+        name: String = "BOSS",
+        number: String = "8795989222",
         isOwner: Boolean = true,
         isPriority: Boolean = true
     ) {
@@ -783,17 +783,19 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         CallStateManager.onIncomingCall(caller, simLabel = simLabel, isSimulated = true)
     }
 
-    fun simulateUnknownCall() {
+    fun simulateUnknownCall(
+        name: String = "Unknown \"Mine\"",
+        number: String = "8073469203"
+    ) {
         val simLabel = if (preferredSim.value == SimManager.SIM_2) "SIM 2" else "SIM 1"
-        val number = "+91 98989 12345"
         val caller = CallerInfo(
             phoneNumber = number,
             formattedNumber = PhoneNumberUtils.formatDisplay(number),
-            displayName = "Unknown Caller",
+            displayName = name,
             isKnown = false,
             isPriority = false,
             isOwner = false,
-            contactLabel = "Unknown Caller"
+            contactLabel = name
         )
         CallStateManager.onIncomingCall(caller, simLabel = simLabel, isSimulated = true)
     }
