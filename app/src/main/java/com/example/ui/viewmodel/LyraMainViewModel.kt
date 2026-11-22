@@ -17,13 +17,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.database.LyraDatabase
 import com.example.data.local.entity.CallNote
+import com.example.data.local.entity.CallRecording
 import com.example.data.local.entity.CallSummary
 import com.example.data.local.entity.ScheduledCall
 import com.example.data.local.entity.VoicemailEntry
 import com.example.data.local.preferences.LyraPreferences
+import com.example.service.CallRecordingCoordinator
 import com.example.service.ScheduledCallScheduler
 import com.example.data.remote.CloudContactBackup
 import com.example.data.repository.CallLogRepository
+import com.example.data.repository.CallRecordingRepository
 import com.example.data.repository.CallRepository
 import com.example.data.repository.CloudBackupRepository
 import com.example.data.repository.ContactsRepository
@@ -47,6 +50,9 @@ import com.example.service.QuickSmsService
 import com.example.service.SmsDispatchHelper
 import com.example.ui.theme.AppThemeStyle
 import com.example.utils.AudioRecorderManager
+import com.example.utils.CallRecordingPlayer
+import com.example.utils.CallRecordingStorage
+import com.example.utils.CallRecordingSupportStatus
 import com.example.utils.GitHubReleaseInfo
 import com.example.utils.GitHubUpdateManager
 import com.example.utils.GoogleAuthHelper
@@ -55,6 +61,7 @@ import com.example.utils.MediaCropTransform
 import com.example.utils.PermissionHelper
 import com.example.utils.PhoneNumberUtils
 import com.example.utils.ProfileMediaStorage
+import com.example.utils.RecordingPlaybackState
 import com.example.utils.SimManager
 import com.example.utils.SimSlotInfo
 import com.example.utils.UpdateCheckResult
@@ -117,6 +124,7 @@ data class PermissionsState(
     val exactAlarmAllowed: Boolean = false,
     val batteryOptimizationIgnored: Boolean = false,
     val sendSmsAllowed: Boolean = false,
+    val callRecordingStorageAllowed: Boolean = true,
     val isDefaultDialer: Boolean = false,
     val isCallScreener: Boolean = false
 )
@@ -130,8 +138,9 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     private val aiRepository = LocalRuleBasedAiRepository()
     private val voicemailAiRepository = UniversalVoicemailAiRepository(context)
     private val voicemailRecorder = AudioRecorderManager(context)
-    private val inCallRecorder = AudioRecorderManager(context)
     private val voicemailEngine = VoicemailEngine(context)
+    private val recordingPlayer = CallRecordingPlayer(context)
+    private val callRecordingRepository = CallRecordingRepository(context, database.callRecordingDao())
     private val voicemailDao = database.voicemailDao()
     private val scheduledCallDao = database.scheduledCallDao()
     private var voicemailJob: Job? = null
@@ -189,10 +198,24 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val canMergeConference: StateFlow<Boolean> = CallStateManager.canMergeConference
     val isConferenceMerged: StateFlow<Boolean> = CallStateManager.isConferenceMerged
     val callStatusBanner: StateFlow<String?> = CallStateManager.callStatusBanner
-    val isCallRecording: StateFlow<Boolean> = inCallRecorder.isRecording
-    val callRecordingSeconds: StateFlow<Long> = inCallRecorder.elapsedSeconds
+    val isCallRecording: StateFlow<Boolean> = CallRecordingCoordinator.isRecording
+    val callRecordingSeconds: StateFlow<Long> = CallRecordingCoordinator.elapsedSeconds
+    val isCallRecordingTwoWay: StateFlow<Boolean> = CallRecordingCoordinator.isTwoWayAudio
+    val activeRecordingSourceLabel: StateFlow<String> = CallRecordingCoordinator.activeCaptureSourceLabel
+    val lastSavedRecording: StateFlow<CallRecording?> = CallRecordingCoordinator.lastSavedRecording
     val currentCallNotes: StateFlow<String> = CallStateManager.currentCallNotes
     val lastSummary: StateFlow<CallSummary?> = CallStateManager.lastSummary
+
+    // Call Recordings Library & Capability Status
+    val allCallRecordings: StateFlow<List<CallRecording>> = callRecordingRepository.getAllRecordings()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val recordingPlaybackState: StateFlow<RecordingPlaybackState> = recordingPlayer.playbackState
+
+    private val _callRecordingCapability = MutableStateFlow(CallRecordingStorage.detectRecordingCapability(context))
+    val callRecordingCapability: StateFlow<CallRecordingSupportStatus> = _callRecordingCapability.asStateFlow()
+
+    private val _recordingActionMessage = MutableStateFlow<String?>(null)
+    val recordingActionMessage: StateFlow<String?> = _recordingActionMessage.asStateFlow()
 
     // Permissions State (populated asynchronously off the main thread in loadData)
     private val _permissionsState = MutableStateFlow(PermissionsState())
@@ -507,8 +530,10 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     private var hasRunStartupUpdateCheck = false
 
     init {
+        CallRecordingCoordinator.bindApplicationContext(context)
         loadData()
         refreshAudioDeviceAvailability()
+        refreshRecordingCapability()
         runCatching {
             audioManager?.registerAudioDeviceCallback(audioDeviceCallback, Handler(Looper.getMainLooper()))
         }
@@ -536,7 +561,8 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
             when (val result = GitHubUpdateManager.checkLatestRelease(repoSlug)) {
                 is UpdateCheckResult.UpdateAvailable -> {
                     val skipped = skippedUpdateVersion.value
-                    if (manual || skipped != result.release.tagName) {
+                    val alreadySkipped = GitHubUpdateManager.isSameVersion(skipped, result.release.tagName)
+                    if (manual || !alreadySkipped) {
                         _availableUpdate.value = result.release
                     }
                     _updateCheckStatus.value = "Update ${result.release.tagName} available!"
@@ -644,6 +670,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
             exactAlarmAllowed = PermissionHelper.canScheduleExactAlarms(context),
             batteryOptimizationIgnored = PermissionHelper.isIgnoringBatteryOptimizations(context),
             sendSmsAllowed = PermissionHelper.hasSendSmsPermission(context),
+            callRecordingStorageAllowed = PermissionHelper.hasCallRecordingStoragePermission(context),
             isDefaultDialer = PermissionHelper.isDefaultDialer(context),
             isCallScreener = PermissionHelper.isCallScreener(context)
         )
@@ -765,38 +792,58 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     fun sendDtmf(digit: Char) = CallStateManager.sendDtmfTone(digit)
     fun updateInCallNote(note: String) = CallStateManager.updateNotes(note)
 
+    fun refreshRecordingCapability() {
+        _callRecordingCapability.value = CallRecordingStorage.detectRecordingCapability(context)
+    }
+
     fun toggleCallRecording() {
-        if (inCallRecorder.isRecording.value) {
-            stopCallRecordingIfActive(save = true)
-        } else {
-            runCatching {
-                inCallRecorder.startRecording(viewModelScope) {
-                    stopCallRecordingIfActive(save = true)
-                }
-                CallStateManager.setCallStatusBanner("Recording call locally")
-            }.onFailure { err ->
-                CallStateManager.setCallStatusBanner(
-                    err.localizedMessage ?: "Microphone permission required to record call"
-                )
-            }
-        }
+        refreshRecordingCapability()
+        CallRecordingCoordinator.toggleRecording(context, currentCaller.value)
     }
 
     private fun stopCallRecordingIfActive(save: Boolean) {
-        if (!inCallRecorder.isRecording.value) return
-        if (!save) {
-            inCallRecorder.cancelRecording()
-            return
+        CallRecordingCoordinator.stopAndSaveIfActive(context, save = save)
+    }
+
+    fun toggleRecordingPlayback(recording: CallRecording) {
+        recordingPlayer.togglePlayPause(recording)
+    }
+
+    fun stopRecordingPlayback() {
+        recordingPlayer.stop()
+    }
+
+    fun seekRecordingPlayback(positionMs: Int) {
+        recordingPlayer.seekTo(positionMs)
+    }
+
+    fun shareCallRecording(recording: CallRecording): Boolean {
+        val shareIntent = CallRecordingStorage.createShareIntent(context, recording)
+        if (shareIntent == null) {
+            _recordingActionMessage.value = "Unable to open recording file for sharing."
+            return false
         }
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val wav = runCatching { inCallRecorder.stopAndBuildWav() }.getOrNull()
-            if (wav != null && wav.size > 44) {
-                val saved = runCatching { inCallRecorder.saveWavToInternalStorage(wav, "call_rec") }.getOrNull()
-                if (saved != null) {
-                    CallStateManager.setCallStatusBanner("Saved recording: ${saved.name}")
-                }
+        return runCatching {
+            context.startActivity(shareIntent)
+            true
+        }.onFailure {
+            _recordingActionMessage.value = "No compatible app found to share WAV recording."
+        }.getOrDefault(false)
+    }
+
+    fun deleteCallRecording(recording: CallRecording) {
+        viewModelScope.launch {
+            if (recordingPlaybackState.value.activeRecordingId == recording.id) {
+                recordingPlayer.stop()
             }
+            callRecordingRepository.deleteRecording(recording)
+            _recordingActionMessage.value = "Deleted ${recording.fileName}"
         }
+    }
+
+    fun clearRecordingActionMessage() {
+        _recordingActionMessage.value = null
+        recordingPlayer.clearError()
     }
 
     @SuppressLint("MissingPermission")
@@ -1566,7 +1613,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         secondaryDialConnectJob?.cancel()
         runCatching { audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback) }
         voicemailRecorder.cancelRecording()
-        inCallRecorder.cancelRecording()
+        recordingPlayer.release()
         voicemailEngine.release()
     }
 }

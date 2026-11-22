@@ -91,7 +91,7 @@ class LyraPreferences(private val context: Context) {
         val KEY_UNREAD_MISSED_CALLS_JSON = stringPreferencesKey("unread_missed_calls_json")
 
         // GitHub Releases In-App Update Configuration
-        const val DEFAULT_GITHUB_UPDATE_REPO = "ajay/lyra"
+        const val DEFAULT_GITHUB_UPDATE_REPO = "Ajaywx07/lyra-phone-call"
         val KEY_GITHUB_UPDATE_REPO = stringPreferencesKey("github_update_repo")
         val KEY_SKIPPED_UPDATE_VERSION = stringPreferencesKey("skipped_update_version")
 

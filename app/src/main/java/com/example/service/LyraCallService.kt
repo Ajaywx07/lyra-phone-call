@@ -96,8 +96,21 @@ class LyraCallService : Service() {
         val isSpeakerOn: Boolean,
         val isRingerSilenced: Boolean,
         val isFullScreenUiVisible: Boolean,
-        val isAppInForeground: Boolean
+        val isAppInForeground: Boolean,
+        val isRecording: Boolean = false
     )
+
+    private fun resolveForegroundType(snapshot: CallForegroundSnapshot): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
+        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            snapshot.isRecording &&
+            PermissionHelper.hasMicrophonePermission(this)
+        ) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        }
+        return type
+    }
 
     private class OverlayLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
         private val lifecycleRegistry = LifecycleRegistry(this)
@@ -156,11 +169,7 @@ class LyraCallService : Service() {
     }
 
     private fun startForegroundImmediately(snapshot: CallForegroundSnapshot) {
-        val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-        } else {
-            0
-        }
+        val foregroundType = resolveForegroundType(snapshot)
         val isLockedOrOff = NotificationHelper.isDeviceLockedOrScreenOff(this)
         val hasCustomBanner = !isLockedOrOff &&
             !snapshot.isFullScreenUiVisible &&
@@ -236,7 +245,8 @@ class LyraCallService : Service() {
             isSpeakerOn = CallStateManager.isSpeakerOn.value,
             isRingerSilenced = CallStateManager.isRingerSilenced.value,
             isFullScreenUiVisible = CallStateManager.isFullScreenIncomingUiVisible.value,
-            isAppInForeground = LyraApplication.isAppInForeground
+            isAppInForeground = LyraApplication.isAppInForeground,
+            isRecording = CallRecordingCoordinator.isRecording.value
         )
     }
 
@@ -259,21 +269,26 @@ class LyraCallService : Service() {
                     isSpeakerOn = speaker,
                     isRingerSilenced = CallStateManager.isRingerSilenced.value,
                     isFullScreenUiVisible = CallStateManager.isFullScreenIncomingUiVisible.value,
-                    isAppInForeground = LyraApplication.isAppInForeground
+                    isAppInForeground = LyraApplication.isAppInForeground,
+                    isRecording = CallRecordingCoordinator.isRecording.value
                 )
             }
-            combine(
-                baseFlow,
+            val metaFlow = combine(
                 CallStateManager.isRingerSilenced,
                 CallStateManager.isFullScreenIncomingUiVisible,
                 LyraApplication.isAppInForegroundFlow,
-                CallStateManager.activeSimLabel
-            ) { snap, silenced, fullScreenVisible, inForeground, simLabel ->
+                CallStateManager.activeSimLabel,
+                CallRecordingCoordinator.isRecording
+            ) { silenced, fullScreenVisible, inForeground, simLabel, recording ->
+                arrayOf<Any>(silenced, fullScreenVisible, inForeground, simLabel, recording)
+            }
+            combine(baseFlow, metaFlow) { snap, meta ->
                 snap.copy(
-                    simLabel = simLabel,
-                    isRingerSilenced = silenced,
-                    isFullScreenUiVisible = fullScreenVisible,
-                    isAppInForeground = inForeground
+                    isRingerSilenced = meta[0] as Boolean,
+                    isFullScreenUiVisible = meta[1] as Boolean,
+                    isAppInForeground = meta[2] as Boolean,
+                    simLabel = meta[3] as String,
+                    isRecording = meta[4] as Boolean
                 )
             }.collect { snapshot ->
                 val enableProximity = snapshot.state == CallStateEnum.DIALING ||
@@ -301,11 +316,7 @@ class LyraCallService : Service() {
     }
 
     private suspend fun publishForSnapshot(snapshot: CallForegroundSnapshot) {
-        val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-        } else {
-            0
-        }
+        val foregroundType = resolveForegroundType(snapshot)
         val settings = runCatching { preferences.getIncomingCallSettingsSnapshot() }.getOrNull()
         val showPhoto = settings?.showContactPhotoOnCall ?: true
         val fullscreenEnabled = settings?.isFullscreenIncomingEnabled ?: true

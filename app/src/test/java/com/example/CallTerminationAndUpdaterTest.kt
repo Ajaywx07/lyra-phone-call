@@ -206,37 +206,60 @@ class CallTerminationAndUpdaterTest {
 
     @Test
     fun gitHubUpdateManager_parsesVersionsAndValidatesReleaseJsonAndIntent() {
-        assertEquals("ajay" to "lyra", GitHubUpdateManager.normalizeRepoSlug("https://github.com/ajay/lyra/"))
-        assertEquals("ajay" to "lyra", GitHubUpdateManager.normalizeRepoSlug("ajay/lyra"))
+        assertEquals(
+            "Ajaywx07/lyra-phone-call",
+            com.example.data.local.preferences.LyraPreferences.DEFAULT_GITHUB_UPDATE_REPO
+        )
+        assertEquals(
+            "Ajaywx07" to "lyra-phone-call",
+            GitHubUpdateManager.normalizeRepoSlug("https://github.com/Ajaywx07/lyra-phone-call/")
+        )
+        assertEquals(
+            "Ajaywx07" to "lyra-phone-call",
+            GitHubUpdateManager.normalizeRepoSlug("Ajaywx07/lyra-phone-call")
+        )
         assertNull(GitHubUpdateManager.normalizeRepoSlug("invalid-slug"))
 
+        // Uppercase V-prefix and lowercase v-prefix tags must compare identically
+        assertEquals("2.1.0", GitHubUpdateManager.normalizeVersion("V2.1.0"))
+        assertEquals("2.1.0", GitHubUpdateManager.normalizeVersion("v2.1.0"))
+        assertTrue(GitHubUpdateManager.isSameVersion("V2.1.0", "v2.1.0"))
+        assertTrue(GitHubUpdateManager.isSameVersion("V2.1.0", "2.1.0"))
+        assertFalse(GitHubUpdateManager.isSameVersion("V2.1.0", "V2.2.0"))
+
+        assertTrue(GitHubUpdateManager.isNewerVersion("V2.1.0", "2.0"))
         assertTrue(GitHubUpdateManager.isNewerVersion("v2.1.0", "2.0"))
         assertTrue(GitHubUpdateManager.isNewerVersion("2.0.1", "2.0"))
+        assertFalse(GitHubUpdateManager.isNewerVersion("V2.0.0", "2.0"))
         assertFalse(GitHubUpdateManager.isNewerVersion("v2.0.0", "2.0"))
-        assertFalse(GitHubUpdateManager.isNewerVersion("v2.0-beta.1", "2.0"))
-        assertFalse(GitHubUpdateManager.isNewerVersion("v1.9.5", "2.0"))
+        assertFalse(GitHubUpdateManager.isNewerVersion("V2.0-beta.1", "2.0"))
+        assertFalse(GitHubUpdateManager.isNewerVersion("V1.9.5", "2.0"))
 
         val sampleJson = """
             {
-              "tag_name": "v2.1.0",
-              "name": "Lyra 2.1.0",
-              "body": "Immediate call disconnect & voicemail audio improvements",
-              "html_url": "https://github.com/ajay/lyra/releases/tag/v2.1.0",
+              "tag_name": "V2.1.0",
+              "name": "Lyra V2.1.0",
+              "body": "Automated minor release build",
+              "html_url": "https://github.com/Ajaywx07/lyra-phone-call/releases/tag/V2.1.0",
               "published_at": "2026-11-21T10:00:00Z",
               "draft": false,
               "assets": [
                 {
-                  "name": "lyra-v2.1.0-release.apk",
-                  "browser_download_url": "https://github.com/ajay/lyra/releases/download/v2.1.0/lyra-v2.1.0-release.apk"
+                  "name": "app-debug.apk",
+                  "browser_download_url": "https://github.com/Ajaywx07/lyra-phone-call/releases/download/V2.1.0/app-debug.apk"
+                },
+                {
+                  "name": "lyra-v2.1.0.apk",
+                  "browser_download_url": "https://github.com/Ajaywx07/lyra-phone-call/releases/download/V2.1.0/lyra-v2.1.0.apk"
                 }
               ]
             }
         """.trimIndent()
         val parsed = GitHubUpdateManager.parseReleaseJson(sampleJson)
         assertNotNull(parsed)
-        assertEquals("v2.1.0", parsed?.tagName)
+        assertEquals("V2.1.0", parsed?.tagName)
         assertEquals("2.1.0", parsed?.normalizedVersion)
-        assertTrue(parsed?.apkDownloadUrl?.endsWith(".apk") == true)
+        assertTrue(parsed?.apkDownloadUrl?.endsWith("/lyra-v2.1.0.apk") == true)
 
         val viewIntent = GitHubUpdateManager.buildExternalUpdateIntent(parsed!!)
         assertNotNull(viewIntent)
@@ -256,12 +279,12 @@ class CallTerminationAndUpdaterTest {
         var skipped = false
         var dismissed = false
         val release = GitHubReleaseInfo(
-            tagName = "v2.2.0",
+            tagName = "V2.2.0",
             normalizedVersion = "2.2.0",
-            releaseTitle = "Lyra 2.2.0 Release",
+            releaseTitle = "Lyra V2.2.0 Release",
             releaseNotes = "- Instant SIP 603 decline\n- GitHub Releases updater",
-            htmlUrl = "https://github.com/ajay/lyra/releases/tag/v2.2.0",
-            apkDownloadUrl = "https://github.com/ajay/lyra/releases/download/v2.2.0/lyra.apk",
+            htmlUrl = "https://github.com/Ajaywx07/lyra-phone-call/releases/tag/V2.2.0",
+            apkDownloadUrl = "https://github.com/Ajaywx07/lyra-phone-call/releases/download/V2.2.0/lyra-v2.2.0.apk",
             publishedAt = "2026-11-21T12:00:00Z"
         )
 
@@ -275,9 +298,10 @@ class CallTerminationAndUpdaterTest {
                 )
             }
         }
+        ShadowLooper.idleMainLooper()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("update_available_dialog").assertIsDisplayed()
-        composeTestRule.onNodeWithText("v2.0 → v2.2.0").assertIsDisplayed()
+        composeTestRule.onNodeWithText("v${BuildConfig.VERSION_NAME} → V2.2.0").assertIsDisplayed()
         composeTestRule.onNodeWithTag("update_download_btn").performClick()
         assertTrue(downloaded)
         composeTestRule.onNodeWithTag("update_skip_btn").performClick()
@@ -297,6 +321,12 @@ class CallTerminationAndUpdaterTest {
             }
         }
         composeTestRule.waitForIdle()
+        val installedLabel = "Installed: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+        composeTestRule.onNodeWithTag("about_screen")
+            .performScrollToNode(hasText(installedLabel))
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText(installedLabel).assertIsDisplayed()
+
         composeTestRule.onNodeWithTag("about_screen")
             .performScrollToNode(hasTestTag("check_updates_btn"))
         composeTestRule.waitForIdle()

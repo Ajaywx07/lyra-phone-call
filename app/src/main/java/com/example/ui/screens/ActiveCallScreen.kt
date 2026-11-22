@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import android.telecom.CallAudioState
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -43,7 +45,9 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SimCard
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -91,6 +95,8 @@ import com.example.ui.theme.EmeraldAccept
 import com.example.ui.theme.LyraTheme
 import com.example.ui.viewmodel.LyraMainViewModel
 import com.example.utils.CallProximityManager
+import com.example.utils.CallRecordingSupportMode
+import com.example.utils.PermissionHelper
 import kotlinx.coroutines.delay
 
 @Composable
@@ -116,12 +122,24 @@ fun ActiveCallScreen(
     val isConferenceMerged by viewModel.isConferenceMerged.collectAsStateWithLifecycle()
     val isCallRecording by viewModel.isCallRecording.collectAsStateWithLifecycle()
     val recordingSeconds by viewModel.callRecordingSeconds.collectAsStateWithLifecycle()
+    val isCallRecordingTwoWay by viewModel.isCallRecordingTwoWay.collectAsStateWithLifecycle()
+    val recordingCapability by viewModel.callRecordingCapability.collectAsStateWithLifecycle()
     val callStatusBanner by viewModel.callStatusBanner.collectAsStateWithLifecycle()
     val screenStyle by viewModel.callScreenStyle.collectAsStateWithLifecycle()
     val animationStyle by viewModel.callAnimationStyle.collectAsStateWithLifecycle()
     val showContactPhoto by viewModel.showContactPhotoOnCall.collectAsStateWithLifecycle()
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val isNearEar by CallProximityManager.isNearEar.collectAsStateWithLifecycle()
+
+    val recordPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.refreshRecordingCapability()
+        viewModel.loadData()
+        if (PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
+            viewModel.toggleCallRecording()
+        }
+    }
 
     val defaultCaller = CallerInfo(
         phoneNumber = "+91 98765 43210",
@@ -141,6 +159,7 @@ fun ActiveCallScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshAudioDeviceAvailability()
+        viewModel.refreshRecordingCapability()
     }
 
     val isCallOngoing = callState == CallStateEnum.DIALING || callState == CallStateEnum.ACTIVE
@@ -485,6 +504,88 @@ fun ActiveCallScreen(
                             )
                         }
                     }
+                }
+
+                // Clear 1-Tap Call Recording Capsule + Android/OEM 2-Way Restriction Indicator
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 400.dp)
+                        .fillMaxWidth()
+                        .padding(bottom = if (compactHeight) 8.dp else 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val recFormatted = String.format("%02d:%02d", recordingSeconds / 60, recordingSeconds % 60)
+                    val recButtonColor = if (isCallRecording) {
+                        CrimsonDecline.copy(alpha = 0.24f)
+                    } else {
+                        overlayButtonSurface
+                    }
+                    val recBorderColor = if (isCallRecording) {
+                        CrimsonDecline.copy(alpha = 0.78f)
+                    } else {
+                        accentColor.copy(alpha = 0.42f)
+                    }
+                    Surface(
+                        onClick = {
+                            if (isCallRecording || PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
+                                viewModel.toggleCallRecording()
+                            } else {
+                                recordPermissionLauncher.launch(PermissionHelper.getCallRecordingRuntimePermissions())
+                            }
+                        },
+                        shape = CircleShape,
+                        color = recButtonColor,
+                        border = BorderStroke(1.dp, recBorderColor),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("active_call_record_btn")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isCallRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
+                                contentDescription = if (isCallRecording) "Stop Call Recording" else "Start Call Recording",
+                                tint = CrimsonDecline,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isCallRecording) {
+                                    "Stop Recording • $recFormatted"
+                                } else {
+                                    "Record Call"
+                                },
+                                color = overlayTextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    val restrictionNote = when {
+                        isCallRecording && isCallRecordingTwoWay -> "Two-way audio active • Saving to Lyra/Recordings"
+                        isCallRecording -> "Mic-only active (Android restricts 2-way line capture)"
+                        recordingCapability.mode == CallRecordingSupportMode.MIC_ONLY_RESTRICTED ->
+                            "Mic-only mode • Android restricts 2-way line capture"
+                        recordingCapability.mode == CallRecordingSupportMode.PERMISSION_REQUIRED ->
+                            "Mic permission required for call recording"
+                        else -> "Two-way recording ready • Lyra/Recordings"
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = restrictionNote,
+                        color = if (isCallRecording) CrimsonDecline else overlayHintColor.copy(alpha = 0.85f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("active_call_recording_capability_note")
+                    )
                 }
 
                 // Fixed Bottom Controls Dock (Non-Scrolling 2-Row × 3-Column Grid + 70% End Call Pill)

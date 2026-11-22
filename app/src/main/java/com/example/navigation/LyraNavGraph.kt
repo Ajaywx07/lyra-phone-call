@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.ActiveCallScreen
 import com.example.ui.screens.CallHistoryScreen
+import com.example.ui.screens.CallRecordingsScreen
 import com.example.ui.screens.CallSummaryScreen
 import com.example.ui.screens.ContactDetailsScreen
 import com.example.ui.screens.ContactsScreen
@@ -89,6 +90,7 @@ fun LyraNavGraph(
                 onNavigateToIncomingCall = { navController.navigate(LyraDestinations.INCOMING_CALL) },
                 onNavigateToScheduledCalls = { navController.navigate(LyraDestinations.SCHEDULED_CALLS) },
                 onNavigateToVoicemail = { navController.navigate(LyraDestinations.VOICEMAIL) },
+                onNavigateToCallRecordings = { navController.navigate(LyraDestinations.CALL_RECORDINGS) },
                 onNavigateTab = navigateTab
             )
         }
@@ -198,6 +200,9 @@ fun LyraNavGraph(
                 onNavigateTab = navigateTab,
                 onOpenContactDetails = {
                     navController.navigate(LyraDestinations.CONTACT_DETAILS)
+                },
+                onOpenRecordings = {
+                    navController.navigate(LyraDestinations.CALL_RECORDINGS)
                 }
             )
         }
@@ -215,6 +220,13 @@ fun LyraNavGraph(
 
         composable(LyraDestinations.SCHEDULED_CALLS) {
             ScheduledCallsScreen(
+                viewModel = viewModel,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(LyraDestinations.CALL_RECORDINGS) {
+            CallRecordingsScreen(
                 viewModel = viewModel,
                 onBackClick = { navController.popBackStack() }
             )

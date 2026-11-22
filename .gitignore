@@ -16,5 +16,11 @@
 local.properties
 .env
 debug.keystore
+*.keystore
+*.jks
+!debug.keystore.base64
+*.apk
+*.aab
+release-assets/
 *-debug.log
 

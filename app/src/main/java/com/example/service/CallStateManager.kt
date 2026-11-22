@@ -44,7 +44,9 @@ object CallStateManager {
     private var appContext: Context? = null
 
     fun bindApplicationContext(context: Context) {
-        appContext = context.applicationContext ?: context
+        val ctx = context.applicationContext ?: context
+        appContext = ctx
+        CallRecordingCoordinator.bindApplicationContext(ctx)
     }
 
     private val _callState = MutableStateFlow(CallStateEnum.IDLE)
@@ -315,6 +317,7 @@ object CallStateManager {
     }
 
     fun cancelDialingOrUnconnectedCall() {
+        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = false)
         terminateLiveTelecomCall()
         clearState()
     }
@@ -327,14 +330,17 @@ object CallStateManager {
         if (_callState.value == CallStateEnum.VOICEMAIL) {
             restoreAfterVoicemail()
         }
+        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = true)
         terminateLiveTelecomCall()
         onCallEnded(callRepository, onSummaryReady)
     }
 
     fun onCallEnded(callRepository: CallRepository? = null, onSummaryReady: ((CallSummary) -> Unit)? = null) {
         if (_callState.value == CallStateEnum.DISCONNECTED || _callState.value == CallStateEnum.IDLE) {
+            CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = true)
             return
         }
+        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = true)
         timerJob?.cancel()
         val caller = _currentCaller.value
         val duration = _callDurationSeconds.value
@@ -512,6 +518,7 @@ object CallStateManager {
     @Suppress("DEPRECATION")
     fun clearState() {
         timerJob?.cancel()
+        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = false)
         if (_callState.value == CallStateEnum.VOICEMAIL) {
             restoreAfterVoicemail()
         }

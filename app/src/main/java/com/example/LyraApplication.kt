@@ -10,6 +10,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.example.domain.model.CallStateEnum
+import com.example.service.CallRecordingCoordinator
 import com.example.service.CallStateManager
 import com.example.service.LyraCallService
 import com.example.service.NotificationHelper
@@ -51,6 +52,7 @@ class LyraApplication : Application(), ImageLoaderFactory {
         super.onCreate()
 
         CallStateManager.bindApplicationContext(this)
+        CallRecordingCoordinator.bindApplicationContext(this)
         // Ensure FirebaseApp is initialized safely (App Check is configured in MainActivity/CallActivity with Intent)
         ensureFirebaseInitialized(this)
         NotificationHelper.createNotificationChannels(this)

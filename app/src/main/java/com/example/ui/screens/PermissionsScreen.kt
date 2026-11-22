@@ -391,11 +391,28 @@ fun PermissionsScreen(
 
         item {
             PermissionCard(
-                title = "Microphone (Voicemail & Call Audio)",
-                description = "Records incoming caller voicemail messages locally after the beep.",
+                title = "Microphone (Call Recording & Voicemail)",
+                description = "Records in-call WAV audio and caller voicemails locally on your device.",
                 isGranted = perms.microphoneAllowed,
                 onGrantClick = {
                     singleLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            )
+        }
+
+        item {
+            PermissionCard(
+                title = "Shared Storage (Lyra/Recordings)",
+                description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    "Scoped MediaStore saves call recordings under Lyra/Recordings with zero broad storage permissions required."
+                } else {
+                    "Required on Android 8–9 to save call recordings into shared storage under Lyra/Recordings."
+                },
+                isGranted = perms.callRecordingStorageAllowed,
+                onGrantClick = {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        singleLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    }
                 }
             )
         }

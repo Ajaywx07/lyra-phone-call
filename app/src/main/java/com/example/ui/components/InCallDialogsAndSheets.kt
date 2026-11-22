@@ -102,6 +102,8 @@ import com.example.ui.screens.DIAL_KEYS
 import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.EmeraldAccept
 import com.example.ui.theme.LyraTheme
+import com.example.utils.CallRecordingStorage
+import com.example.utils.CallRecordingSupportMode
 import com.example.utils.PermissionHelper
 import com.example.utils.PhoneNumberUtils
 import kotlinx.coroutines.awaitCancellation
@@ -134,11 +136,14 @@ fun InCallMoreOptionsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        if (PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
             onToggleRecording()
         }
+    }
+    val recordingSupport = remember(isRecording) {
+        CallRecordingStorage.detectRecordingCapability(context)
     }
 
     val recFormatted = String.format("%02d:%02d", recordingSeconds / 60, recordingSeconds % 60)
@@ -223,14 +228,21 @@ fun InCallMoreOptionsSheet(
             MoreSheetActionRow(
                 icon = if (isRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
                 title = if (isRecording) "Stop Call Recording ($recFormatted)" else "Call Recording",
-                subtitle = if (isRecording) "Tap to save local WAV recording" else "Record call audio locally on device",
+                subtitle = when {
+                    isRecording -> "Tap to save WAV to Lyra/Recordings"
+                    recordingSupport.mode == CallRecordingSupportMode.MIC_ONLY_RESTRICTED ->
+                        "Saves to Lyra/Recordings (Mic-only: Android restricts 2-way capture)"
+                    recordingSupport.mode == CallRecordingSupportMode.PERMISSION_REQUIRED ->
+                        "Grant Microphone permission to save WAV in Lyra/Recordings"
+                    else -> "Record two-way call audio to Lyra/Recordings"
+                },
                 accentColor = colors.declineColor,
                 isActive = isRecording,
                 onClick = {
-                    if (isRecording || PermissionHelper.hasMicrophonePermission(context)) {
+                    if (isRecording || PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
                         onToggleRecording()
                     } else {
-                        recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        recordAudioPermissionLauncher.launch(PermissionHelper.getCallRecordingRuntimePermissions())
                     }
                 },
                 testTagName = "more_option_record"

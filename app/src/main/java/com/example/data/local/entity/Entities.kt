@@ -91,3 +91,24 @@ data class ScheduledCall(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
+/**
+ * Entity representing a recorded call saved in shared storage under Lyra/Recordings
+ * via Android MediaStore APIs, with caller name & number stored in both filename and Room DB.
+ */
+@Entity(tableName = "call_recordings")
+data class CallRecording(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val callerName: String,
+    val callerNumber: String,
+    val fileName: String,
+    val mediaStoreUri: String,
+    val relativePath: String = "Lyra/Recordings",
+    val durationSeconds: Long = 0L,
+    val fileSizeBytes: Long = 0L,
+    val timestamp: Long = System.currentTimeMillis(),
+    val captureSource: String = "VOICE_COMMUNICATION",
+    val isTwoWayAudio: Boolean = false
+)
+
+

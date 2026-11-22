@@ -73,10 +73,14 @@ object GitHubUpdateManager {
         return owner to repo
     }
 
+    internal fun normalizeVersion(rawVersion: String): String {
+        return rawVersion.trim()
+            .replaceFirst(Regex("^[vV]+"), "")
+            .trim()
+    }
+
     internal fun parseSemanticVersion(rawVersion: String): SemanticVersion {
-        val cleaned = rawVersion.trim()
-            .removePrefix("v")
-            .removePrefix("V")
+        val cleaned = normalizeVersion(rawVersion)
             .substringBefore('+')
         val mainPart = cleaned.substringBefore('-')
         val preRelease = cleaned.substringAfter('-', missingDelimiterValue = "")
@@ -88,6 +92,13 @@ object GitHubUpdateManager {
 
     internal fun isNewerVersion(remoteTag: String, currentVersion: String): Boolean {
         return parseSemanticVersion(remoteTag) > parseSemanticVersion(currentVersion)
+    }
+
+    internal fun isSameVersion(versionA: String, versionB: String): Boolean {
+        val cleanA = normalizeVersion(versionA)
+        val cleanB = normalizeVersion(versionB)
+        if (cleanA.isBlank() || cleanB.isBlank()) return false
+        return parseSemanticVersion(cleanA) == parseSemanticVersion(cleanB)
     }
 
     internal fun parseReleaseJson(jsonBody: String): GitHubReleaseInfo? {
@@ -110,8 +121,10 @@ object GitHubUpdateManager {
                     val name = asset.optString("name", "")
                     val url = asset.optString("browser_download_url", "").trim()
                     if (name.endsWith(".apk", ignoreCase = true) && url.startsWith("https://")) {
-                        apkUrl = url
-                        break
+                        if (apkUrl == null || name.startsWith("lyra-v", ignoreCase = true)) {
+                            apkUrl = url
+                            if (name.startsWith("lyra-v", ignoreCase = true)) break
+                        }
                     }
                 }
             }
@@ -121,7 +134,7 @@ object GitHubUpdateManager {
 
             GitHubReleaseInfo(
                 tagName = tag,
-                normalizedVersion = tag.trim().removePrefix("v").removePrefix("V"),
+                normalizedVersion = normalizeVersion(tag),
                 releaseTitle = title,
                 releaseNotes = notes,
                 htmlUrl = safeHtml.ifBlank { apkUrl.orEmpty() },

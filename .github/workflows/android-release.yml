@@ -1,32 +1,41 @@
-name: Android Release Build
+name: Android Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      build_type:
-        description: 'Build output type'
-        required: true
-        default: 'apk'
+      build_mode:
+        description: 'Build signing mode'
+        required: false
+        default: 'auto'
         type: choice
         options:
-          - apk
-          - aab
-          - both
+          - auto
+          - release
+          - debug
+
+# Prevent overlapping runs on the same ref so versionCode / V{version} tags never race.
+# Note: Only branch pushes and workflow_dispatch trigger this workflow (no tag-push trigger),
+# so pushing tag V{newVersion} will never create a duplicate workflow run.
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
-  release-build:
-    name: Build Release Package
+  release:
+    name: Build, Version & Publish Release
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -36,7 +45,7 @@ jobs:
 
       - name: Accept Android SDK Licenses
         run: |
-          SDK_MGR="$(command -v sdkmanager || find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          SDK_MGR="$(command -v sdkmanager || find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)"
           if [ -n "$SDK_MGR" ]; then
             yes | "$SDK_MGR" --licenses >/dev/null 2>&1 || true
           fi
@@ -46,81 +55,402 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Prepare Keystores
+      - name: Compute Next Semantic Minor Version & Version Code
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          repo = os.environ["GITHUB_REPO"]
+          current_sha = os.environ["CURRENT_SHA"]
+
+          def run(cmd, check=True):
+              return subprocess.run(cmd, text=True, capture_output=True, check=check)
+
+          # Read baseline defaults from app/build.gradle.kts
+          gradle_text = Path("app/build.gradle.kts").read_text(encoding="utf-8")
+          m_fallback_code = re.search(r"resolvedVersionCode[\s\S]*?\?:\s*(\d+)", gradle_text)
+          m_fallback_name = re.search(r'resolvedVersionName[\s\S]*?\?:\s*"([^"]+)"', gradle_text)
+          base_code = int(m_fallback_code.group(1)) if m_fallback_code else 2
+          base_name = m_fallback_name.group(1) if m_fallback_name else "2.0"
+
+          def parse_semver(tag: str):
+              cleaned = re.sub(r"^[vV]+", "", tag.strip())
+              cleaned = cleaned.split("+", 1)[0].split("-", 1)[0]
+              nums = [int(p) for p in cleaned.split(".") if p.isdigit()]
+              major = nums[0] if len(nums) > 0 else 2
+              minor = nums[1] if len(nums) > 1 else 0
+              patch = nums[2] if len(nums) > 2 else 0
+              return (major, minor, patch)
+
+          def extract_recorded_code(body: str):
+              if not body:
+                  return None
+              match = re.search(r"<!--\s*lyra-version-code:\s*(\d+)\s*-->", body)
+              if match:
+                  return int(match.group(1))
+              match2 = re.search(r"Version Code[^0-9]*(\d+)", body)
+              return int(match2.group(1)) if match2 else None
+
+          releases = []
+          res = run(["gh", "api", f"repos/{repo}/releases?per_page=100"], check=False)
+          if res.returncode == 0 and res.stdout.strip():
+              try:
+                  data = json.loads(res.stdout)
+                  if isinstance(data, list):
+                      releases = [r for r in data if not r.get("draft", False)]
+              except Exception:
+                  releases = []
+
+          latest_release = None
+          latest_res = run(["gh", "api", f"repos/{repo}/releases/latest"], check=False)
+          if latest_res.returncode == 0 and latest_res.stdout.strip():
+              try:
+                  lr = json.loads(latest_res.stdout)
+                  if isinstance(lr, dict) and lr.get("tag_name") and not lr.get("draft", False):
+                      latest_release = lr
+              except Exception:
+                  latest_release = None
+
+          # Collect git tags and commit mappings
+          git_tags = set(t.strip() for t in run(["git", "tag", "-l"]).stdout.splitlines() if t.strip())
+          head_tags = set(
+              t.strip()
+              for t in run(["git", "tag", "--points-at", current_sha]).stdout.splitlines()
+              if t.strip()
+          )
+
+          release_tags = {r.get("tag_name", "").strip() for r in releases if r.get("tag_name")}
+          all_tags_lower = {t.lower() for t in (git_tags | release_tags)}
+
+          max_recorded_code = base_code
+          for r in releases:
+              rc = extract_recorded_code(r.get("body", ""))
+              if rc is not None and rc > max_recorded_code:
+                  max_recorded_code = rc
+
+          # Idempotency check: if this exact commit already has a non-draft release tag pointing at it,
+          # reuse its version and versionCode so re-runs / workflow_dispatch update instead of duplicating.
+          matched_release = None
+          for r in releases:
+              tag = r.get("tag_name", "").strip()
+              if tag and (tag in head_tags or (r.get("target_commitish") == current_sha and tag.lower().startswith("v"))):
+                  matched_release = r
+                  break
+
+          if matched_release:
+              release_tag = matched_release["tag_name"].strip()
+              new_version = re.sub(r"^[vV]+", "", release_tag)
+              recorded = extract_recorded_code(matched_release.get("body", ""))
+              new_code = recorded if recorded is not None else (max_recorded_code + 1)
+              previous_tag = ""
+              reuse_release = "true"
+          else:
+              anchor_tag = None
+              if latest_release and latest_release.get("tag_name"):
+                  anchor_tag = latest_release["tag_name"].strip()
+              elif releases:
+                  best = max(releases, key=lambda r: parse_semver(r.get("tag_name", "0.0.0")))
+                  anchor_tag = best.get("tag_name", "").strip()
+              elif git_tags:
+                  v_tags = [t for t in git_tags if t.lower().startswith("v")]
+                  if v_tags:
+                      anchor_tag = max(v_tags, key=parse_semver)
+
+              previous_tag = anchor_tag or ""
+              major, minor, _ = parse_semver(anchor_tag or base_name)
+              minor += 1
+              while f"v{major}.{minor}.0" in all_tags_lower:
+                  minor += 1
+
+              new_version = f"{major}.{minor}.0"
+              release_tag = f"V{new_version}"
+              new_code = max_recorded_code + 1
+              reuse_release = "false"
+
+          apk_file_name = f"lyra-v{new_version}.apk"
+
+          print(f"Previous release tag : {previous_tag or '(none)'}")
+          print(f"Target release tag   : {release_tag}")
+          print(f"Resolved versionName : {new_version}")
+          print(f"Resolved versionCode : {new_code}")
+          print(f"Target APK filename  : {apk_file_name}")
+          print(f"Reusing existing SHA : {reuse_release}")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"NEW_VERSION={new_version}\n")
+              fh.write(f"NEW_VERSION_CODE={new_code}\n")
+              fh.write(f"RELEASE_TAG={release_tag}\n")
+              fh.write(f"APK_FILE_NAME={apk_file_name}\n")
+              fh.write(f"PREVIOUS_TAG={previous_tag}\n")
+              fh.write(f"REUSE_EXISTING_RELEASE={reuse_release}\n")
+          PY
+
+      - name: Prepare Keystores & Runtime Config
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          BUILD_MODE: ${{ inputs.build_mode || 'auto' }}
         run: |
           if [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
+            tr -d '\r\n ' < debug.keystore.base64 | base64 -d > debug.keystore
           elif [ ! -f debug.keystore ]; then
             keytool -genkeypair -v -keystore debug.keystore \
               -storepass android -alias androiddebugkey -keypass android \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
-            echo "HAS_RELEASE_KEYSTORE=true" >> "$GITHUB_ENV"
-          else
-            echo "HAS_RELEASE_KEYSTORE=false" >> "$GITHUB_ENV"
-          fi
 
-      - name: Decode optional google-services.json from secrets
-        env:
-          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
-        run: |
           if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > app/google-services.json
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '\r\n ' | base64 -d > app/google-services.json
           fi
 
-      - name: Ensure .env exists
-        run: |
           if [ ! -f .env ]; then
             cp .env.example .env 2>/dev/null || touch .env
           fi
 
-      - name: Clean obsolete removed source files if left on branch
-        run: |
-          rm -f app/src/main/java/com/example/ui/screens/VoiceTranscribeScreen.kt \
-                app/src/main/java/com/example/ui/viewmodel/VoiceTranscribeViewModel.kt
+          USE_RELEASE="false"
+          if [ "$BUILD_MODE" != "debug" ] && [ -n "$RELEASE_KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            KEYSTORE_TMP="${{ runner.temp }}/my-upload-key.jks"
+            echo "$RELEASE_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$KEYSTORE_TMP"
+            if keytool -list -keystore "$KEYSTORE_TMP" -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then
+              USE_RELEASE="true"
+              echo "KEYSTORE_PATH=$KEYSTORE_TMP" >> "$GITHUB_ENV"
+            else
+              rm -f "$KEYSTORE_TMP"
+              if [ "$BUILD_MODE" = "release" ]; then
+                echo "::error::RELEASE_KEYSTORE_BASE64 could not be verified with STORE_PASSWORD."
+                exit 1
+              fi
+              echo "::warning::Release keystore verification failed; building debug APK instead."
+            fi
+          elif [ "$BUILD_MODE" = "release" ]; then
+            echo "::error::build_mode=release was requested, but keystore secrets are missing."
+            exit 1
+          fi
+
+          echo "HAS_RELEASE_KEYSTORE=$USE_RELEASE" >> "$GITHUB_ENV"
+          echo "Signing mode selected: HAS_RELEASE_KEYSTORE=$USE_RELEASE"
 
       - name: Build Signed Release APK
-        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' && (inputs.build_type == 'apk' || inputs.build_type == 'both' || github.event_name == 'push') }}
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
+          VERSION_NAME: ${{ env.NEW_VERSION }}
+          VERSION_CODE: ${{ env.NEW_VERSION_CODE }}
+        run: |
+          gradle :app:assembleRelease \
+            -PVERSION_NAME="${NEW_VERSION}" \
+            -PVERSION_CODE="${NEW_VERSION_CODE}" \
+            --no-build-cache --no-daemon --stacktrace
+          BUILT_APK="$(find app/build/outputs/apk/release -maxdepth 2 -name '*.apk' | head -n 1)"
+          test -n "$BUILT_APK" -a -f "$BUILT_APK"
+          echo "RAW_APK_PATH=$BUILT_APK" >> "$GITHUB_ENV"
+          echo "BUILD_VARIANT=release" >> "$GITHUB_ENV"
 
-      - name: Build Signed Release AAB
-        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' && (inputs.build_type == 'aab' || inputs.build_type == 'both') }}
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
-        run: gradle :app:bundleRelease --no-daemon --stacktrace
-
-      - name: Build Debug APK Fallback (when no release keystore secret is set)
+      - name: Build Debug APK Fallback
         if: ${{ env.HAS_RELEASE_KEYSTORE != 'true' }}
         env:
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+          VERSION_NAME: ${{ env.NEW_VERSION }}
+          VERSION_CODE: ${{ env.NEW_VERSION_CODE }}
+        run: |
+          gradle :app:assembleDebug \
+            -PVERSION_NAME="${NEW_VERSION}" \
+            -PVERSION_CODE="${NEW_VERSION_CODE}" \
+            --no-build-cache --no-daemon --stacktrace
+          BUILT_APK="$(find app/build/outputs/apk/debug -maxdepth 2 -name '*.apk' | head -n 1)"
+          test -n "$BUILT_APK" -a -f "$BUILT_APK"
+          echo "RAW_APK_PATH=$BUILT_APK" >> "$GITHUB_ENV"
+          echo "BUILD_VARIANT=debug" >> "$GITHUB_ENV"
 
-      - name: Upload Release Artifacts
+      - name: Validate BuildConfig & Packaged APK Match Target Version
+        run: |
+          python3 - <<'PY'
+          import glob
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          expected_name = os.environ["NEW_VERSION"]
+          expected_code = os.environ["NEW_VERSION_CODE"]
+          variant = os.environ["BUILD_VARIANT"]
+          apk_path = os.environ["RAW_APK_PATH"]
+
+          bc_candidates = glob.glob(f"app/build/generated/source/buildConfig/{variant}/**/BuildConfig.java", recursive=True)
+          if not bc_candidates:
+              bc_candidates = glob.glob("app/build/generated/source/buildConfig/**/BuildConfig.java", recursive=True)
+          assert bc_candidates, "BuildConfig.java not found after build"
+
+          bc_text = Path(bc_candidates[0]).read_text(encoding="utf-8")
+          m_name = re.search(r'VERSION_NAME\s*=\s*"([^"]+)"', bc_text)
+          m_code = re.search(r'VERSION_CODE\s*=\s*(\d+)', bc_text)
+          assert m_name and m_code, f"Could not parse VERSION_NAME/VERSION_CODE in {bc_candidates[0]}"
+
+          actual_name = m_name.group(1)
+          actual_code = m_code.group(1)
+          print(f"BuildConfig ({bc_candidates[0]}): VERSION_NAME={actual_name}, VERSION_CODE={actual_code}")
+          assert actual_name == expected_name, f"BuildConfig.VERSION_NAME '{actual_name}' != '{expected_name}'"
+          assert actual_code == expected_code, f"BuildConfig.VERSION_CODE '{actual_code}' != '{expected_code}'"
+
+          # Also verify compiled APK manifest metadata using aapt2 if present
+          aapt2_candidates = sorted(glob.glob(f"{os.environ.get('ANDROID_HOME', '/usr/local/lib/android/sdk')}/build-tools/*/aapt2"))
+          if aapt2_candidates:
+              badging = subprocess.run(
+                  [aapt2_candidates[-1], "dump", "badging", apk_path],
+                  text=True, capture_output=True, check=True
+              ).stdout
+              m_apk_code = re.search(r"versionCode='(\d+)'", badging)
+              m_apk_name = re.search(r"versionName='([^']+)'", badging)
+              assert m_apk_code and m_apk_name, f"Unable to parse APK badging: {badging[:200]}"
+              print(f"APK Manifest ({apk_path}): versionName={m_apk_name.group(1)}, versionCode={m_apk_code.group(1)}")
+              assert m_apk_name.group(1) == expected_name, "APK versionName mismatch"
+              assert m_apk_code.group(1) == expected_code, "APK versionCode mismatch"
+          PY
+
+      - name: Stage Renamed APK Outside Repository
+        run: |
+          STAGE_DIR="${{ runner.temp }}/release-assets"
+          mkdir -p "$STAGE_DIR"
+          STAGED_APK="${STAGE_DIR}/${APK_FILE_NAME}"
+          cp "$RAW_APK_PATH" "$STAGED_APK"
+          ls -lh "$STAGED_APK"
+          echo "STAGED_APK_PATH=$STAGED_APK" >> "$GITHUB_ENV"
+
+      - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lyra-release-artifacts
-          path: |
-            app/build/outputs/apk/**/*.apk
-            app/build/outputs/bundle/**/*.aab
+          name: ${{ env.APK_FILE_NAME }}
+          path: ${{ env.STAGED_APK_PATH }}
+          if-no-files-found: error
 
-      - name: Publish GitHub Release on Tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            app/build/outputs/apk/**/*.apk
-            app/build/outputs/bundle/**/*.aab
+      - name: Verify Repository Clean (No APKs or Keystores Tracked/Committed)
+        run: |
+          UNSAFE_FILES="$(git ls-files '*.apk' '*.aab' '*.keystore' '*.jks' | grep -v '^debug\.keystore\.base64$' || true)"
+          if [ -n "$UNSAFE_FILES" ]; then
+            echo "::error::Tracked APK/keystore files detected in repository: $UNSAFE_FILES"
+            exit 1
+          fi
+          MODIFIED_TRACKED="$(git diff --name-only || true)"
+          if [ -n "$MODIFIED_TRACKED" ]; then
+            echo "::error::Workflow modified tracked files unexpectedly: $MODIFIED_TRACKED"
+            exit 1
+          fi
+
+      - name: Create Tag & Publish or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          # Ensure git tag V{newVersion} points to CURRENT_SHA
+          EXISTING_TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG" 2>/dev/null || true)"
+          if [ "$EXISTING_TAG_SHA" != "$CURRENT_SHA" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -fa "$RELEASE_TAG" "$CURRENT_SHA" -m "Release $RELEASE_TAG (versionCode $NEW_VERSION_CODE)"
+            git push origin "refs/tags/${RELEASE_TAG}" --force
+          fi
+
+          # Generate automatic GitHub release notes + append BuildConfig metadata comment
+          NOTES_FILE="${{ runner.temp }}/release-notes.md"
+          if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$RELEASE_TAG" ]; then
+            GEN_BODY="$(gh api "repos/${GITHUB_REPO}/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" \
+              -f target_commitish="$CURRENT_SHA" \
+              -f previous_tag_name="$PREVIOUS_TAG" \
+              --jq '.body' || true)"
+          else
+            GEN_BODY="$(gh api "repos/${GITHUB_REPO}/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" \
+              -f target_commitish="$CURRENT_SHA" \
+              --jq '.body' || true)"
+          fi
+
+          cat > "$NOTES_FILE" <<EOF
+          ${GEN_BODY}
+
+          ---
+          **Build Metadata**
+          - **Tag:** \`${RELEASE_TAG}\`
+          - **Version Name (\`BuildConfig.VERSION_NAME\`):** \`${NEW_VERSION}\`
+          - **Version Code (\`BuildConfig.VERSION_CODE\`):** \`${NEW_VERSION_CODE}\`
+          - **Variant:** \`${BUILD_VARIANT}\`
+          - **APK Asset:** \`${APK_FILE_NAME}\`
+
+          <!-- lyra-version-code: ${NEW_VERSION_CODE} -->
+          EOF
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
+            echo "Updating existing release $RELEASE_TAG..."
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPO" \
+              --title "Lyra ${RELEASE_TAG}" \
+              --notes-file "$NOTES_FILE"
+            gh release upload "$RELEASE_TAG" "$STAGED_APK_PATH" \
+              --repo "$GITHUB_REPO" \
+              --clobber
+          else
+            echo "Creating new release $RELEASE_TAG..."
+            gh release create "$RELEASE_TAG" "$STAGED_APK_PATH" \
+              --repo "$GITHUB_REPO" \
+              --title "Lyra ${RELEASE_TAG}" \
+              --target "$CURRENT_SHA" \
+              --notes-file "$NOTES_FILE"
+          fi
+
+      - name: Validate Published GitHub Release Matches BuildConfig
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPO" --json tagName,name,body,assets,isDraft,targetCommitish)"
+          python3 - "$RELEASE_JSON" <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          release = json.loads(sys.argv[1])
+          expected_tag = os.environ["RELEASE_TAG"]
+          expected_version = os.environ["NEW_VERSION"]
+          expected_code = os.environ["NEW_VERSION_CODE"]
+          expected_asset = os.environ["APK_FILE_NAME"]
+
+          assert not release.get("isDraft", True), "Published release must not remain a draft"
+          actual_tag = release.get("tagName", "")
+          assert actual_tag == expected_tag, f"Release tag '{actual_tag}' != '{expected_tag}'"
+          assert re.sub(r"^[vV]+", "", actual_tag) == expected_version, (
+              f"Release tag '{actual_tag}' does not match BuildConfig.VERSION_NAME '{expected_version}'"
+          )
+
+          m_code = re.search(r"<!--\s*lyra-version-code:\s*(\d+)\s*-->", release.get("body", ""))
+          assert m_code and m_code.group(1) == expected_code, (
+              f"Release metadata versionCode mismatch against BuildConfig.VERSION_CODE '{expected_code}'"
+          )
+
+          asset_names = [a.get("name") for a in release.get("assets", [])]
+          assert expected_asset in asset_names, f"Expected APK '{expected_asset}' not found in release assets: {asset_names}"
+          print(f"Verified published release {actual_tag}: versionName={expected_version}, versionCode={expected_code}, asset={expected_asset}")
+          PY
+
+      - name: Cleanup Temporary Keystores & Staged Files
+        if: always()
+        run: |
+          rm -f "${{ runner.temp }}/my-upload-key.jks" \
+                "${{ runner.temp }}/release-notes.md" \
+                my-upload-key.jks \
+                debug.keystore
+          rm -rf "${{ runner.temp }}/release-assets" release-assets

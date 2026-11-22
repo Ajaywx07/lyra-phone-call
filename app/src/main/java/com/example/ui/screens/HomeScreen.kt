@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.People
@@ -85,6 +86,7 @@ fun HomeScreen(
     onNavigateToIncomingCall: () -> Unit,
     onNavigateToScheduledCalls: () -> Unit = {},
     onNavigateToVoicemail: () -> Unit = {},
+    onNavigateToCallRecordings: () -> Unit = {},
     onNavigateTab: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -95,6 +97,7 @@ fun HomeScreen(
     val isBackgroundCallingEnabled by viewModel.isBackgroundCallingEnabled.collectAsStateWithLifecycle()
     val ownerName by viewModel.ownerName.collectAsStateWithLifecycle()
     val voicemails by viewModel.allVoicemails.collectAsStateWithLifecycle()
+    val callRecordings by viewModel.allCallRecordings.collectAsStateWithLifecycle()
     val scheduledCalls by viewModel.allScheduledCalls.collectAsStateWithLifecycle()
     val aiModelName by viewModel.aiModelName.collectAsStateWithLifecycle()
     val dashboardMediaUri by viewModel.dashboardMediaUri.collectAsStateWithLifecycle()
@@ -421,6 +424,70 @@ fun HomeScreen(
                             CapsuleStatusChip(
                                 text = "Inbox",
                                 color = colors.primary
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Call Recordings Library Card
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    GlassCard(
+                        borderColor = colors.declineColor.copy(alpha = 0.42f),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(24.dp))
+                            .clickable(onClick = onNavigateToCallRecordings)
+                            .testTag("home_call_recordings_card")
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.declineColor.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FiberManualRecord,
+                                        contentDescription = "Call Recordings",
+                                        tint = colors.declineColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Call Recordings (${callRecordings.size})",
+                                        color = colors.textPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Shared WAV archive • Lyra/Recordings",
+                                        color = colors.primaryGlow,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            CapsuleStatusChip(
+                                text = "Recordings",
+                                color = colors.declineColor
                             )
                         }
                     }

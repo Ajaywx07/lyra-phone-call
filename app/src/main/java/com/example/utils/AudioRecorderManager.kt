@@ -39,6 +39,17 @@ class AudioRecorderManager(private val context: Context) {
         private const val MAX_PCM_BYTES = 15 * 1024 * 1024
     }
 
+    enum class CaptureSource(
+        val audioSourceId: Int,
+        val label: String,
+        val isTwoWay: Boolean
+    ) {
+        VOICE_CALL(MediaRecorder.AudioSource.VOICE_CALL, "VOICE_CALL", true),
+        VOICE_COMMUNICATION(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION", false),
+        VOICE_RECOGNITION(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION", false),
+        MIC(MediaRecorder.AudioSource.MIC, "MIC", false)
+    }
+
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private var timerJob: Job? = null
@@ -53,10 +64,14 @@ class AudioRecorderManager(private val context: Context) {
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
+    private val _activeCaptureSource = MutableStateFlow(CaptureSource.MIC)
+    val activeCaptureSource: StateFlow<CaptureSource> = _activeCaptureSource.asStateFlow()
+
     @SuppressLint("MissingPermission")
     fun startRecording(
         scope: CoroutineScope,
         preferVoiceRecognition: Boolean = false,
+        preferCallCapture: Boolean = false,
         onMaxLimitReached: () -> Unit = {}
     ) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -76,9 +91,13 @@ class AudioRecorderManager(private val context: Context) {
         }
 
         val bufferSize = maxOf(minBufferSize * 2, 4096)
-        val recorder = createBestAudioRecord(bufferSize, preferVoiceRecognition)
-            ?: throw IllegalStateException("Failed to initialize microphone AudioRecord.")
+        val (recorder, chosenSource) = createBestAudioRecord(
+            bufferSize = bufferSize,
+            preferVoiceRecognition = preferVoiceRecognition,
+            preferCallCapture = preferCallCapture
+        ) ?: throw IllegalStateException("Failed to initialize microphone AudioRecord.")
 
+        _activeCaptureSource.value = chosenSource
         audioRecord = recorder
         recorder.startRecording()
         _isRecording.value = true
@@ -119,19 +138,35 @@ class AudioRecorderManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     private fun createBestAudioRecord(
         bufferSize: Int,
-        preferVoiceRecognition: Boolean
-    ): AudioRecord? {
-        val sources = if (preferVoiceRecognition) {
-            intArrayOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC)
-        } else {
-            intArrayOf(MediaRecorder.AudioSource.MIC)
+        preferVoiceRecognition: Boolean,
+        preferCallCapture: Boolean
+    ): Pair<AudioRecord, CaptureSource>? {
+        val sources = when {
+            preferCallCapture -> {
+                if (PermissionHelper.hasCaptureAudioOutputPermission(context)) {
+                    listOf(
+                        CaptureSource.VOICE_CALL,
+                        CaptureSource.VOICE_COMMUNICATION,
+                        CaptureSource.VOICE_RECOGNITION,
+                        CaptureSource.MIC
+                    )
+                } else {
+                    listOf(
+                        CaptureSource.VOICE_COMMUNICATION,
+                        CaptureSource.VOICE_RECOGNITION,
+                        CaptureSource.MIC
+                    )
+                }
+            }
+            preferVoiceRecognition -> listOf(CaptureSource.VOICE_RECOGNITION, CaptureSource.MIC)
+            else -> listOf(CaptureSource.MIC)
         }
         for (source in sources) {
             val candidate = runCatching {
-                AudioRecord(source, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
+                AudioRecord(source.audioSourceId, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
             }.getOrNull() ?: continue
             if (candidate.state == AudioRecord.STATE_INITIALIZED) {
-                return candidate
+                return candidate to source
             }
             runCatching { candidate.release() }
         }
