@@ -18,6 +18,16 @@ val escapedGoogleWebClientId = googleWebClientId
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 
+val resolvedVersionName = providers.gradleProperty("VERSION_NAME")
+    .orElse(providers.environmentVariable("VERSION_NAME"))
+    .orElse("2.1")
+    .get()
+val resolvedVersionCode = providers.gradleProperty("VERSION_CODE")
+    .orElse(providers.environmentVariable("VERSION_CODE"))
+    .map { it.toInt() }
+    .orElse(3)
+    .get()
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -26,8 +36,8 @@ android {
     applicationId = "com.ajay.lyra"
     minSdk = 26
     targetSdk = 36
-    versionCode = 3
-    versionName = "2.1"
+    versionCode = resolvedVersionCode
+    versionName = resolvedVersionName
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -91,8 +101,7 @@ secrets {
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
-// Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
+// Some unused dependencies are commented out below until they are restored.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
