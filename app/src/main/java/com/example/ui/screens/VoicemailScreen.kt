@@ -353,7 +353,12 @@ private fun LiveVoicemailHudCard(
                     border = BorderStroke(1.dp, colors.secondary.copy(alpha = 0.5f))
                 ) {
                     Text(
-                        text = "Silent Internal Route",
+                        text = when (phase) {
+                            VoicemailPhase.SPEAKING_GREETING,
+                            VoicemailPhase.PLAYING_BEEP -> "Speaker Acoustic Bridge"
+                            VoicemailPhase.RECORDING_MESSAGE -> "Mic Muted • Capturing Caller"
+                            else -> "Voicemail Screener"
+                        },
                         color = colors.secondaryGlow,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

@@ -385,6 +385,12 @@ class LyraCallService : Service() {
             snapshot.state == CallStateEnum.ACTIVE ||
             snapshot.state == CallStateEnum.VOICEMAIL
         ) {
+            val isLockedOrOff = NotificationHelper.isDeviceLockedOrScreenOff(this)
+            val attachOutgoingFsi = snapshot.state == CallStateEnum.DIALING &&
+                isLockedOrOff &&
+                !snapshot.isFullScreenUiVisible &&
+                PermissionHelper.canUseFullScreenIntent(this)
+
             val ongoingNotification = kotlinx.coroutines.withContext(Dispatchers.IO) {
                 NotificationHelper.buildOngoingCallNotification(
                     context = this@LyraCallService,
@@ -393,7 +399,8 @@ class LyraCallService : Service() {
                     callStartTimeMs = snapshot.startTimeMs,
                     isMuted = snapshot.isMuted,
                     isSpeakerOn = snapshot.isSpeakerOn,
-                    showCallerPhoto = showPhoto
+                    showCallerPhoto = showPhoto,
+                    useFullScreenIntent = attachOutgoingFsi
                 )
             }
             runCatching {

@@ -93,22 +93,39 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
     private fun handleOutgoingTransition(call: Call, isAlreadyActive: Boolean) {
         val handle = call.details?.handle?.schemeSpecificPart ?: ""
         val accountLabel = resolveAccountLabel(call)
+        val formattedHandle = PhoneNumberUtils.formatDisplay(handle)
+        val telecomName = extractTelecomDisplayName(call)
+        val preliminaryCaller = CallerInfo(
+            phoneNumber = handle,
+            formattedNumber = formattedHandle,
+            displayName = telecomName ?: formattedHandle.ifBlank { "Outgoing Call" },
+            photoUri = null,
+            isKnown = telecomName != null,
+            contactLabel = if (telecomName != null) "Saved Contact" else "Outgoing Call"
+        )
+
+        if (CallStateManager.callState.value == CallStateEnum.IDLE ||
+            CallStateManager.currentCaller.value == null
+        ) {
+            CallStateManager.onOutgoingCall(preliminaryCaller, simLabel = accountLabel)
+        }
+        if (isAlreadyActive) {
+            CallStateManager.onCallAnswered()
+        }
+        startCallForegroundService()
+        if (canBringCallUiToFront()) {
+            launchCallUi("ACTION_OUTGOING_CALL")
+        }
+
         serviceScope.launch {
-            if (CallStateManager.callState.value == CallStateEnum.IDLE ||
-                CallStateManager.currentCaller.value == null
+            val db = LyraDatabase.getDatabase(applicationContext)
+            val prefs = LyraPreferences(applicationContext)
+            val repo = ContactsRepository(applicationContext, db.priorityContactDao(), prefs)
+            val resolvedCaller = repo.resolveCaller(handle)
+            if (CallStateManager.callState.value == CallStateEnum.DIALING ||
+                CallStateManager.callState.value == CallStateEnum.ACTIVE
             ) {
-                val db = LyraDatabase.getDatabase(applicationContext)
-                val prefs = LyraPreferences(applicationContext)
-                val repo = ContactsRepository(applicationContext, db.priorityContactDao(), prefs)
-                val caller = repo.resolveCaller(handle)
-                CallStateManager.onOutgoingCall(caller, simLabel = accountLabel)
-            }
-            if (isAlreadyActive) {
-                CallStateManager.onCallAnswered()
-            }
-            startCallForegroundService()
-            if (canBringCallUiToFront()) {
-                launchCallUi("ACTION_OUTGOING_CALL")
+                CallStateManager.updateCurrentCaller(resolvedCaller, simLabel = accountLabel)
             }
         }
     }
@@ -408,28 +425,12 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             return
         }
 
-        serviceScope.launch {
-            val db = LyraDatabase.getDatabase(applicationContext)
-            val prefs = LyraPreferences(applicationContext)
-            val repo = ContactsRepository(applicationContext, db.priorityContactDao(), prefs)
-            val caller = repo.resolveCaller(handle)
-
-            when (currentState) {
-                Call.STATE_DIALING, Call.STATE_CONNECTING -> {
-                    CallStateManager.onOutgoingCall(caller, simLabel = accountLabel)
-                    startCallForegroundService()
-                    if (canBringCallUiToFront()) {
-                        launchCallUi("ACTION_OUTGOING_CALL")
-                    }
-                }
-                Call.STATE_ACTIVE -> {
-                    CallStateManager.onOutgoingCall(caller, simLabel = accountLabel)
-                    CallStateManager.onCallAnswered()
-                    startCallForegroundService()
-                    if (canBringCallUiToFront()) {
-                        launchCallUi("ACTION_OUTGOING_CALL")
-                    }
-                }
+        when (currentState) {
+            Call.STATE_DIALING, Call.STATE_CONNECTING -> {
+                handleOutgoingTransition(call, isAlreadyActive = false)
+            }
+            Call.STATE_ACTIVE -> {
+                handleOutgoingTransition(call, isAlreadyActive = true)
             }
         }
     }
@@ -452,15 +453,29 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         runCatching { activeTelecomCall?.answer(VideoProfile.STATE_AUDIO_ONLY) }
     }
 
-    override fun rejectOrDisconnectCall() {
-        val call = activeTelecomCall ?: return
-        runCatching {
-            if (readCallState(call) == Call.STATE_RINGING) {
-                call.reject(false, null)
-            } else {
-                call.disconnect()
-            }
+    override fun rejectOrDisconnectCall(): Boolean {
+        val candidateCalls = (trackedCalls.toList() + listOfNotNull(activeTelecomCall)).distinct()
+        var signalledAny = false
+        for (call in candidateCalls) {
+            val state = runCatching { readCallState(call) }.getOrDefault(-1)
+            if (state == Call.STATE_DISCONNECTED) continue
+            val ok = runCatching {
+                if (state == Call.STATE_RINGING) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        // SIP 603 Decline: tells carrier this is an explicit user decline (prevents 486 Busy -> forwarding tune delay)
+                        call.reject(Call.REJECT_REASON_DECLINED)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        call.reject(false, null)
+                    }
+                } else {
+                    call.disconnect()
+                }
+                true
+            }.getOrDefault(false)
+            if (ok) signalledAny = true
         }
+        return signalledAny
     }
 
     override fun toggleHold(hold: Boolean) {

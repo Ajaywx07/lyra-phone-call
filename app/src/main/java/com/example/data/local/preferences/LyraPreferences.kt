@@ -90,6 +90,11 @@ class LyraPreferences(private val context: Context) {
         val KEY_LAST_MISSED_READ_AT = longPreferencesKey("last_missed_calls_read_at")
         val KEY_UNREAD_MISSED_CALLS_JSON = stringPreferencesKey("unread_missed_calls_json")
 
+        // GitHub Releases In-App Update Configuration
+        const val DEFAULT_GITHUB_UPDATE_REPO = "ajay/lyra"
+        val KEY_GITHUB_UPDATE_REPO = stringPreferencesKey("github_update_repo")
+        val KEY_SKIPPED_UPDATE_VERSION = stringPreferencesKey("skipped_update_version")
+
         @Volatile
         private var cachedIncomingSnapshot: IncomingCallSettingsSnapshot? = null
 
@@ -307,6 +312,14 @@ class LyraPreferences(private val context: Context) {
 
     val unreadMissedCalls: Flow<List<UnreadMissedCall>> = context.dataStore.data.map { preferences ->
         decodeUnreadMissedCalls(preferences[KEY_UNREAD_MISSED_CALLS_JSON])
+    }
+
+    val githubUpdateRepo: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_GITHUB_UPDATE_REPO] ?: DEFAULT_GITHUB_UPDATE_REPO
+    }
+
+    val skippedUpdateVersion: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SKIPPED_UPDATE_VERSION] ?: ""
     }
 
     suspend fun getIncomingCallSettingsSnapshot(forceRefresh: Boolean = false): IncomingCallSettingsSnapshot {
@@ -544,6 +557,23 @@ class LyraPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs.remove(KEY_UNREAD_MISSED_CALLS_JSON)
             prefs[KEY_LAST_MISSED_READ_AT] = readAtMillis
+        }
+    }
+
+    suspend fun setGithubUpdateRepo(repoSlug: String) {
+        val cleaned = repoSlug.trim()
+            .removePrefix("https://github.com/")
+            .removePrefix("http://github.com/")
+            .trim('/')
+            .ifBlank { DEFAULT_GITHUB_UPDATE_REPO }
+        context.dataStore.edit { prefs ->
+            prefs[KEY_GITHUB_UPDATE_REPO] = cleaned
+        }
+    }
+
+    suspend fun setSkippedUpdateVersion(versionTag: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SKIPPED_UPDATE_VERSION] = versionTag.trim()
         }
     }
 }

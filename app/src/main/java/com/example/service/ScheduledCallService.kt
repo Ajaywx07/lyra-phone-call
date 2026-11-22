@@ -19,48 +19,61 @@ import com.example.utils.PhoneNumberUtils
 import com.example.utils.SimManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Dedicated Foreground Service triggered by [ScheduledCallAlarmReceiver] when an exact
- * [android.app.AlarmManager] alarm fires. Wakes the device cleanly with a bounded WakeLock
- * and processes scheduled outgoing Telecom calls even if Lyra was closed or killed by the system.
+ * [android.app.AlarmManager] alarm fires. Holds a bounded PARTIAL_WAKE_LOCK cleanly across
+ * active jobs and places scheduled outgoing Telecom calls even from Doze, Battery Saver,
+ * locked screen, or killed-process states.
  */
 class ScheduledCallService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var activeJob: Job? = null
+    private val activeJobCount = AtomicInteger(0)
+
+    @Volatile
     private var isForegroundStarted = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val callId = intent?.getLongExtra(ScheduledCallScheduler.EXTRA_SCHEDULED_CALL_ID, -1L) ?: -1L
+        val extraId = intent?.getLongExtra(ScheduledCallScheduler.EXTRA_SCHEDULED_CALL_ID, -1L) ?: -1L
+        val callId = if (extraId > 0L) {
+            extraId
+        } else {
+            intent?.data?.lastPathSegment?.toLongOrNull() ?: -1L
+        }
 
         promoteToForeground(targetName = null, phoneNumber = null)
 
         if (callId <= 0L) {
-            stopForegroundAndRelease(startId)
+            if (activeJobCount.get() <= 0) {
+                stopForegroundAndRelease(startId)
+            }
             return START_NOT_STICKY
         }
 
         acquireWakeLock(applicationContext)
-        activeJob?.cancel()
-        activeJob = serviceScope.launch {
+        activeJobCount.incrementAndGet()
+        serviceScope.launch {
             try {
                 processScheduledCall(callId)
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                stopForegroundAndRelease(startId)
+                if (activeJobCount.decrementAndGet() <= 0) {
+                    activeJobCount.set(0)
+                    stopForegroundAndRelease(startId)
+                }
             }
         }
         return START_NOT_STICKY
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
-        activeJob?.cancel()
+        activeJobCount.set(0)
         stopForegroundAndRelease(startId)
         super.onTimeout(startId, fgsType)
     }
@@ -138,20 +151,7 @@ class ScheduledCallService : Service() {
         }
 
         val telecomManager = applicationContext.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-        if (telecomManager == null) {
-            val reason = "Telecom service unavailable on this device."
-            dao.updateScheduledCall(
-                scheduled.copy(
-                    status = "FAILED",
-                    lastAttemptMillis = now,
-                    statusMessage = reason
-                )
-            )
-            postFallbackNotification(scheduled.contactName, cleanNumber, reason, callId)
-            return
-        }
-
-        val handle = SimManager.resolveHandleForSimKey(applicationContext, scheduled.simKey)
+        val handle = SimManager.resolveFallbackHandleForBackgroundCall(applicationContext, scheduled.simKey)
         val extras = Bundle().apply {
             if (handle != null) {
                 putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle)
@@ -159,31 +159,58 @@ class ScheduledCallService : Service() {
         }
         val uri = Uri.fromParts("tel", cleanNumber, null)
 
-        val outcome = runCatching {
-            telecomManager.placeCall(uri, extras)
+        val telecomOutcome = if (telecomManager != null) {
+            runCatching {
+                telecomManager.placeCall(uri, extras)
+            }
+        } else {
+            Result.failure(IllegalStateException("Telecom service unavailable on this device."))
         }
 
-        if (outcome.isSuccess) {
+        if (telecomOutcome.isSuccess) {
+            val simDescription = scheduled.simKey.replace("_", " ")
             dao.updateScheduledCall(
                 scheduled.copy(
                     status = "PLACED",
                     lastAttemptMillis = now,
-                    statusMessage = "Call placed on time via Foreground Service (${scheduled.simKey.replace("_", " ")})"
+                    statusMessage = "Placed on time ($simDescription)"
                 )
             )
-        } else {
-            val err = outcome.exceptionOrNull()
-            val reason = err?.localizedMessage
-                ?: "Blocked by Android lock-screen or background call policy. Tap Call Now."
-            dao.updateScheduledCall(
-                scheduled.copy(
-                    status = "FAILED",
-                    lastAttemptMillis = now,
-                    statusMessage = reason
-                )
-            )
-            postFallbackNotification(scheduled.contactName, cleanNumber, reason, callId)
+            return
         }
+
+        // Secondary fallback only when screen is unlocked (never force-unlock keyguard)
+        val isLocked = NotificationHelper.isDeviceLockedOrScreenOff(applicationContext)
+        if (!isLocked && PermissionHelper.hasCallPhonePermission(applicationContext)) {
+            val actionCallOutcome = runCatching {
+                val dialIntent = Intent(Intent.ACTION_CALL, uri).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                applicationContext.startActivity(dialIntent)
+            }
+            if (actionCallOutcome.isSuccess) {
+                dao.updateScheduledCall(
+                    scheduled.copy(
+                        status = "PLACED",
+                        lastAttemptMillis = now,
+                        statusMessage = "Placed via ACTION_CALL fallback"
+                    )
+                )
+                return
+            }
+        }
+
+        val err = telecomOutcome.exceptionOrNull()
+        val reason = err?.localizedMessage
+            ?: "Blocked by OEM lock-screen or background calling restriction. Tap Call Now."
+        dao.updateScheduledCall(
+            scheduled.copy(
+                status = "FAILED",
+                lastAttemptMillis = now,
+                statusMessage = reason
+            )
+        )
+        postFallbackNotification(scheduled.contactName, cleanNumber, reason, callId)
     }
 
     @SuppressLint("MissingPermission")
@@ -220,7 +247,7 @@ class ScheduledCallService : Service() {
     }
 
     override fun onDestroy() {
-        activeJob?.cancel()
+        activeJobCount.set(0)
         serviceScope.cancel()
         releaseWakeLock()
         if (isForegroundStarted) {
@@ -236,7 +263,7 @@ class ScheduledCallService : Service() {
 
     companion object {
         private const val WAKE_LOCK_TAG = "Lyra:ScheduledCallWakeLock"
-        private const val WAKE_LOCK_TIMEOUT_MS = 20_000L
+        private const val WAKE_LOCK_TIMEOUT_MS = 25_000L
 
         @Volatile
         private var activeWakeLock: PowerManager.WakeLock? = null
@@ -258,6 +285,10 @@ class ScheduledCallService : Service() {
                     activeWakeLock = wl
                 }
             }
+        }
+
+        fun releaseWakeLockIfUnused() {
+            releaseWakeLock()
         }
 
         fun releaseWakeLock() {

@@ -7,13 +7,18 @@ import androidx.core.content.ContextCompat
 
 /**
  * Receives exact [android.app.AlarmManager] triggers for scheduled calls and immediately
- * hands execution to [ScheduledCallService] (a Foreground Service with a bounded WakeLock)
- * so calls are processed reliably on time even if the app was closed or killed.
+ * hands execution to [ScheduledCallService] (a Foreground Service with a bounded PARTIAL_WAKE_LOCK)
+ * so calls execute on time even when locked or under Battery Saver without waking/unlocking screen prematurely.
  */
 class ScheduledCallAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
-        val callId = intent?.getLongExtra(ScheduledCallScheduler.EXTRA_SCHEDULED_CALL_ID, -1L) ?: -1L
+        val extraId = intent?.getLongExtra(ScheduledCallScheduler.EXTRA_SCHEDULED_CALL_ID, -1L) ?: -1L
+        val callId = if (extraId > 0L) {
+            extraId
+        } else {
+            intent?.data?.lastPathSegment?.toLongOrNull() ?: -1L
+        }
         if (callId <= 0L) return
 
         ScheduledCallService.acquireWakeLock(context)
@@ -27,7 +32,7 @@ class ScheduledCallAlarmReceiver : BroadcastReceiver() {
         }.getOrDefault(false)
 
         if (!started) {
-            ScheduledCallService.releaseWakeLock()
+            ScheduledCallService.releaseWakeLockIfUnused()
         }
     }
 }

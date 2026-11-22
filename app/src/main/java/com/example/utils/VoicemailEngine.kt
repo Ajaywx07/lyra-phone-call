@@ -1,6 +1,7 @@
 package com.example.utils
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.ToneGenerator
@@ -8,7 +9,6 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
-import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,9 +25,9 @@ import kotlin.coroutines.resume
 private const val TAG = "VoicemailEngine"
 
 /**
- * Handles local audio orchestration for Lyra's Voicemail flow:
- * 1. Speaks the custom Lyra greeting via Android TextToSpeech
- * 2. Plays a crisp audible beep via ToneGenerator
+ * Handles audio orchestration for Lyra's Voicemail flow:
+ * 1. Speaks the custom Lyra greeting via Android TextToSpeech routed to USAGE_VOICE_COMMUNICATION
+ * 2. Plays a crisp audible beep via ToneGenerator (STREAM_VOICE_CALL with STREAM_MUSIC fallback)
  * 3. Plays back saved local WAV voicemail recordings via MediaPlayer
  */
 class VoicemailEngine(private val context: Context) {
@@ -47,6 +47,7 @@ class VoicemailEngine(private val context: Context) {
         withTimeoutOrNull(estimatedWaitMs) {
             speakWithTts(cleanText)
         } ?: run {
+            stopGreeting()
             // Fallback pacing if TTS engine couldn't synthesize audio on this device
             delay(1200L)
         }
@@ -57,6 +58,13 @@ class VoicemailEngine(private val context: Context) {
         var localTts: TextToSpeech? = null
 
         fun finishSafely() {
+            runCatching {
+                localTts?.stop()
+                localTts?.shutdown()
+            }
+            if (tts === localTts) {
+                tts = null
+            }
             if (cont.isActive) cont.resume(Unit)
         }
 
@@ -68,8 +76,18 @@ class VoicemailEngine(private val context: Context) {
                     finishSafely()
                     return@TextToSpeech
                 }
-                engine.language = Locale.US
-                engine.setSpeechRate(0.96f)
+                val langStatus = engine.setLanguage(Locale.US)
+                if (langStatus == TextToSpeech.LANG_MISSING_DATA || langStatus == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    engine.language = Locale.getDefault()
+                }
+                engine.setPitch(1.0f)
+                engine.setSpeechRate(0.98f)
+                engine.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
                     override fun onDone(id: String?) {
@@ -86,7 +104,7 @@ class VoicemailEngine(private val context: Context) {
                     }
                 })
                 val params = Bundle().apply {
-                    putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
+                    putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_VOICE_CALL)
                 }
                 val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
                 if (result == TextToSpeech.ERROR) {
@@ -104,13 +122,20 @@ class VoicemailEngine(private val context: Context) {
                 localTts?.stop()
                 localTts?.shutdown()
             }
+            if (tts === localTts) {
+                tts = null
+            }
         }
     }
 
     suspend fun playVoicemailBeep() = withContext(Dispatchers.Default) {
         var toneGen: ToneGenerator? = null
         try {
-            toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 90)
+            toneGen = runCatching {
+                ToneGenerator(AudioManager.STREAM_VOICE_CALL, 85)
+            }.getOrElse {
+                ToneGenerator(AudioManager.STREAM_MUSIC, 85)
+            }
             toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 420)
             delay(500L)
         } catch (e: Exception) {

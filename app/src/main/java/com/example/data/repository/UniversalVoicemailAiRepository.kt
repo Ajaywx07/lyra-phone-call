@@ -1,11 +1,16 @@
 package com.example.data.repository
 
+import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.example.domain.model.AiEngineConfig
 import com.example.domain.model.AiProvider
 import com.example.domain.model.VoicemailAnalysisResult
+import com.example.utils.configureAppCheck
+import com.example.utils.ensureFirebaseInitialized
+import com.example.utils.isAppCheckConfigured
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.content
@@ -34,13 +39,37 @@ private const val TAG = "VoicemailAiRepo"
  * - GEMINI_REST: Direct Google Gemini REST API using a runtime user-supplied API key
  * - OPENAI_COMPATIBLE: OpenAI / Groq / OpenRouter / custom REST endpoint with user API key
  */
-class UniversalVoicemailAiRepository {
+class UniversalVoicemailAiRepository(
+    private val context: Context? = null
+) {
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
+
+    private fun prepareFirebaseAiOrFailure(): IllegalStateException? {
+        val ctx = context?.applicationContext
+        if (ctx != null) {
+            if (!ensureFirebaseInitialized(ctx)) {
+                return IllegalStateException(
+                    "Firebase is not initialized in this process. Ensure google-services.json is configured and the device is unlocked."
+                )
+            }
+            if (!isAppCheckConfigured()) {
+                configureAppCheck(ctx, null)
+            }
+        } else {
+            val hasDefaultApp = runCatching { FirebaseApp.getInstance() != null }.getOrDefault(false)
+            if (!hasDefaultApp) {
+                return IllegalStateException(
+                    "Default FirebaseApp is not initialized. Pass Context to UniversalVoicemailAiRepository or initialize FirebaseApp first."
+                )
+            }
+        }
+        return null
+    }
 
     suspend fun analyzeVoicemailAudio(
         wavBytes: ByteArray,
@@ -71,6 +100,7 @@ class UniversalVoicemailAiRepository {
             withTimeout(25_000L) {
                 when (config.provider) {
                     AiProvider.FIREBASE_AI -> {
+                        prepareFirebaseAiOrFailure()?.let { return@withTimeout Result.failure(it) }
                         val model = Firebase.ai.generativeModel(modelName = modelName)
                         val response = model.generateContent("Reply with OK in 2 words.")
                         val reply = response.text?.trim().orEmpty()
@@ -159,6 +189,7 @@ class UniversalVoicemailAiRepository {
         callerName: String,
         modelName: String
     ): Result<VoicemailAnalysisResult> {
+        prepareFirebaseAiOrFailure()?.let { return Result.failure(it) }
         return try {
             val schema = Schema.obj(
                 properties = mapOf(

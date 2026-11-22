@@ -13,8 +13,7 @@ import com.example.domain.model.CallStateEnum
 import com.example.service.CallStateManager
 import com.example.service.LyraCallService
 import com.example.service.NotificationHelper
-import com.example.utils.configureAppCheck
-import com.google.firebase.FirebaseApp
+import com.example.utils.ensureFirebaseInitialized
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,14 +50,15 @@ class LyraApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
-        // Ensure FirebaseApp is initialized at process startup before any service/receiver runs
-        if (FirebaseApp.getApps(this).isEmpty()) {
-            FirebaseApp.initializeApp(this)
-        }
-        configureAppCheck(this, null)
+        CallStateManager.bindApplicationContext(this)
+        // Ensure FirebaseApp is initialized safely (App Check is configured in MainActivity/CallActivity with Intent)
+        ensureFirebaseInitialized(this)
         NotificationHelper.createNotificationChannels(this)
         appScope.launch(Dispatchers.IO) {
             com.example.data.local.preferences.LyraPreferences(this@LyraApplication).warmUpCache()
+            runCatching {
+                com.example.service.ScheduledCallScheduler.rescheduleAllPending(this@LyraApplication)
+            }
         }
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

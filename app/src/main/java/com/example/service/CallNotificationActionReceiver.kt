@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 class CallNotificationActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        CallStateManager.bindApplicationContext(context)
         when (intent.action) {
             ACTION_ACCEPT_CALL -> {
                 CallStateManager.acceptActiveCall()

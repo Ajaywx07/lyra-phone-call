@@ -38,6 +38,7 @@ import com.example.service.CallStateManager
 import com.example.service.NotificationHelper
 import com.example.service.ScheduledCallScheduler
 import com.example.ui.components.TopIncomingCallBanner
+import com.example.ui.components.UpdateAvailableDialog
 import com.example.ui.theme.LyraTheme
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LyraMainViewModel
@@ -83,7 +84,12 @@ class MainActivity : ComponentActivity() {
                 val showContactPhoto by viewModel.showContactPhotoOnCall.collectAsStateWithLifecycle()
                 val isSimulatedCall by viewModel.isSimulatedCall.collectAsStateWithLifecycle()
                 val isFullScreenIncomingUiVisible by CallStateManager.isFullScreenIncomingUiVisible.collectAsStateWithLifecycle()
+                val availableUpdate by viewModel.availableUpdate.collectAsStateWithLifecycle()
                 val previousCallState = remember { mutableStateOf(liveCallState) }
+
+                LaunchedEffect(Unit) {
+                    viewModel.checkForAppUpdatesIfStartupPending()
+                }
 
                 LaunchedEffect(activeIntent) {
                     val pending = activeIntent ?: return@LaunchedEffect
@@ -242,6 +248,17 @@ class MainActivity : ComponentActivity() {
                                     NotificationHelper.cancelAllCallNotifications(this@MainActivity)
                                 }
                             )
+                        }
+
+                        if (liveCallState == CallStateEnum.IDLE) {
+                            availableUpdate?.let { release ->
+                                UpdateAvailableDialog(
+                                    release = release,
+                                    onDownloadClick = { viewModel.openAvailableUpdate(release) },
+                                    onSkipVersion = { viewModel.skipUpdateVersion(release.tagName) },
+                                    onDismiss = { viewModel.dismissUpdatePrompt() }
+                                )
+                            }
                         }
                     }
                 }

@@ -247,7 +247,8 @@ fun LyraNavGraph(
 
         composable(LyraDestinations.ABOUT) {
             AboutScreen(
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                viewModel = viewModel
             )
         }
     }

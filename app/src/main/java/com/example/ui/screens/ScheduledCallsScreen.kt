@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.entity.ScheduledCall
+import com.example.service.ScheduledCallScheduler
 import com.example.ui.components.EmptyState
 import com.example.ui.components.GlassCard
 import com.example.ui.components.LyraContactAvatar
@@ -169,7 +170,11 @@ fun ScheduledCallsScreen(
                     )
                 }
 
-                if (!perms.exactAlarmAllowed || !perms.phoneAllowed) {
+                val needsReliabilitySetup = !perms.exactAlarmAllowed ||
+                    !perms.phoneAllowed ||
+                    !perms.batteryOptimizationIgnored ||
+                    !perms.fullScreenIntentAllowed
+                if (needsReliabilitySetup) {
                     item {
                         GlassCard(borderColor = AmberPriority.copy(alpha = 0.55f)) {
                             Column(
@@ -182,29 +187,59 @@ fun ScheduledCallsScreen(
                                     Text("Permissions Needed for Exact Auto-Call", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Text(
-                                    text = "Grant Exact Alarms and Phone Call permissions so scheduled alarms can hand off calls to Telecom reliably.",
+                                    text = "Grant Exact Alarms, Phone Call, Full-Screen Intent & Unrestricted Battery so OnePlus/OxygenOS Doze never delays scheduled calls.",
                                     color = colors.textSecondary,
                                     fontSize = 12.sp
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     if (!perms.phoneAllowed) {
-                                        Button(
-                                            onClick = { permissionLauncher.launch(Manifest.permission.CALL_PHONE) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
-                                            shape = CircleShape
-                                        ) {
-                                            Text("Allow Calls", color = colors.onPrimaryButton, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        item {
+                                            Button(
+                                                onClick = { permissionLauncher.launch(Manifest.permission.CALL_PHONE) },
+                                                colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                                                shape = CircleShape
+                                            ) {
+                                                Text("Allow Calls", color = colors.onPrimaryButton, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                     if (!perms.exactAlarmAllowed) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                settingsLauncher.launch(PermissionHelper.createExactAlarmSettingsIntent(context))
-                                            },
-                                            border = BorderStroke(1.dp, AmberPriority),
-                                            shape = CircleShape
-                                        ) {
-                                            Text("Allow Exact Alarms", color = AmberPriority, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        item {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    settingsLauncher.launch(PermissionHelper.createExactAlarmSettingsIntent(context))
+                                                },
+                                                border = BorderStroke(1.dp, AmberPriority),
+                                                shape = CircleShape
+                                            ) {
+                                                Text("Allow Exact Alarms", color = AmberPriority, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    if (!perms.batteryOptimizationIgnored) {
+                                        item {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    settingsLauncher.launch(PermissionHelper.createBatteryOptimizationIntent())
+                                                },
+                                                border = BorderStroke(1.dp, colors.primary),
+                                                shape = CircleShape
+                                            ) {
+                                                Text("Unrestrict Battery", color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    if (!perms.fullScreenIntentAllowed) {
+                                        item {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    settingsLauncher.launch(PermissionHelper.createFullScreenIntentSettingsIntent(context))
+                                                },
+                                                border = BorderStroke(1.dp, colors.secondaryGlow),
+                                                shape = CircleShape
+                                            ) {
+                                                Text("Allow Lock-Screen UI", color = colors.secondaryGlow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                 }
@@ -445,7 +480,10 @@ internal fun ScheduledCallEditorDialog(
     var number by remember { mutableStateOf(initialCall?.phoneNumber ?: "") }
     var simKey by remember { mutableStateOf(initialCall?.simKey ?: SimManager.SIM_1) }
     var scheduledAtMillis by remember {
-        mutableLongStateOf(initialCall?.scheduledAtMillis ?: (System.currentTimeMillis() + 5 * 60_000L))
+        mutableLongStateOf(
+            initialCall?.scheduledAtMillis
+                ?: ScheduledCallScheduler.normalizeToMinuteStart(System.currentTimeMillis() + 5 * 60_000L)
+        )
     }
 
     val contactPickerLauncher = rememberLauncherForActivityResult(
@@ -467,7 +505,7 @@ internal fun ScheduledCallEditorDialog(
         }
     }
 
-    val dateTimeFormatter = remember { SimpleDateFormat("EEE, dd MMM yyyy • hh:mm a", Locale.getDefault()) }
+    val dateTimeFormatter = remember { SimpleDateFormat("EEE, dd MMM yyyy • hh:mm:ss a", Locale.getDefault()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -654,6 +692,7 @@ internal fun ScheduledCallEditorDialog(
                                     cal.set(Calendar.HOUR_OF_DAY, h)
                                     cal.set(Calendar.MINUTE, min)
                                     cal.set(Calendar.SECOND, 0)
+                                    cal.set(Calendar.MILLISECOND, 0)
                                     scheduledAtMillis = cal.timeInMillis
                                 },
                                 cal.get(Calendar.HOUR_OF_DAY),
@@ -675,7 +714,9 @@ internal fun ScheduledCallEditorDialog(
                                 shape = CircleShape,
                                 border = BorderStroke(1.dp, colors.glassBorder),
                                 modifier = Modifier.clickable {
-                                    scheduledAtMillis = System.currentTimeMillis() + mins * 60_000L
+                                    scheduledAtMillis = ScheduledCallScheduler.normalizeToMinuteStart(
+                                        System.currentTimeMillis() + mins * 60_000L
+                                    )
                                 }
                             ) {
                             Text(

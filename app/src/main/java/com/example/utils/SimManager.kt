@@ -132,6 +132,49 @@ object SimManager {
         return getAvailableSims(context).firstOrNull { it.simKey == simKey }?.accountHandle
     }
 
+    /**
+     * Resolves a concrete [PhoneAccountHandle] for unattended background/locked calls so
+     * Dual-SIM devices configured to "Ask Every Time" never stall at STATE_SELECT_PHONE_ACCOUNT.
+     */
+    @SuppressLint("MissingPermission")
+    fun resolveFallbackHandleForBackgroundCall(
+        context: Context,
+        simKey: String
+    ): PhoneAccountHandle? {
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        val availableSims = getAvailableSims(context)
+        val defaultOutgoing = if (PermissionHelper.hasPhonePermission(context)) {
+            runCatching { telecomManager?.getDefaultOutgoingPhoneAccount("tel") }.getOrNull()
+        } else {
+            null
+        }
+        val capableHandles = if (PermissionHelper.hasPhonePermission(context)) {
+            runCatching { telecomManager?.callCapablePhoneAccounts.orEmpty() }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+        return resolveFallbackHandleFromAccounts(
+            simKey = simKey,
+            availableSims = availableSims,
+            defaultOutgoingHandle = defaultOutgoing,
+            callCapableHandles = capableHandles
+        )
+    }
+
+    internal fun resolveFallbackHandleFromAccounts(
+        simKey: String,
+        availableSims: List<SimSlotInfo>,
+        defaultOutgoingHandle: PhoneAccountHandle?,
+        callCapableHandles: List<PhoneAccountHandle>
+    ): PhoneAccountHandle? {
+        if (simKey != SIM_ASK) {
+            availableSims.firstOrNull { it.simKey == simKey }?.accountHandle?.let { return it }
+        }
+        defaultOutgoingHandle?.let { return it }
+        callCapableHandles.firstOrNull()?.let { return it }
+        return availableSims.firstOrNull { it.accountHandle != null }?.accountHandle
+    }
+
     fun displayLabelForSimKey(context: Context, simKey: String): String {
         if (simKey == SIM_ASK) return "Ask Every Time"
         val match = getAvailableSims(context).firstOrNull { it.simKey == simKey }

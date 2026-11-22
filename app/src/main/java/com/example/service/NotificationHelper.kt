@@ -45,6 +45,7 @@ object NotificationHelper {
     const val CHANNEL_ONGOING = "lyra_ongoing_call_channel"
     const val CHANNEL_ASSISTANT = "lyra_assistant_channel"
     const val CHANNEL_MISSED_CALL = "lyra_missed_call_channel"
+    const val CHANNEL_SCHEDULED_ALERTS = "lyra_scheduled_alerts_v2"
 
     const val NOTIFICATION_ID_INCOMING = 1001
     const val NOTIFICATION_ID_ASSISTANT = 1002
@@ -136,11 +137,23 @@ object NotificationHelper {
                 setShowBadge(true)
             }
 
+            val scheduledAlertChannel = NotificationChannel(
+                CHANNEL_SCHEDULED_ALERTS,
+                "Lyra Scheduled Call Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "High-priority scheduled outgoing call alerts and lock-screen call handoff"
+                enableVibration(false)
+                setSound(null, null)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+
             notificationManager.createNotificationChannel(incomingChannel)
             notificationManager.createNotificationChannel(incomingSilentChannel)
             notificationManager.createNotificationChannel(ongoingChannel)
             notificationManager.createNotificationChannel(assistantChannel)
             notificationManager.createNotificationChannel(missedCallChannel)
+            notificationManager.createNotificationChannel(scheduledAlertChannel)
         }
     }
 
@@ -323,7 +336,8 @@ object NotificationHelper {
         callStartTimeMs: Long,
         isMuted: Boolean,
         isSpeakerOn: Boolean,
-        showCallerPhoto: Boolean = true
+        showCallerPhoto: Boolean = true,
+        useFullScreenIntent: Boolean = false
     ): Notification {
         createNotificationChannels(context)
 
@@ -387,11 +401,22 @@ object NotificationHelper {
             }
         }
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ONGOING)
+        val targetChannel = if (useFullScreenIntent && callState == CallStateEnum.DIALING) {
+            CHANNEL_SCHEDULED_ALERTS
+        } else {
+            CHANNEL_ONGOING
+        }
+        val builder = NotificationCompat.Builder(context, targetChannel)
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setContentTitle(displayCaller.displayName)
             .setContentText(subtitle)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(
+                if (useFullScreenIntent && callState == CallStateEnum.DIALING) {
+                    NotificationCompat.PRIORITY_HIGH
+                } else {
+                    NotificationCompat.PRIORITY_DEFAULT
+                }
+            )
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(contentPendingIntent)
@@ -416,6 +441,13 @@ object NotificationHelper {
                 if (isSpeakerOn) "Speaker Off" else "Speaker",
                 speakerPendingIntent
             )
+
+        if (useFullScreenIntent &&
+            callState == CallStateEnum.DIALING &&
+            PermissionHelper.canUseFullScreenIntent(context)
+        ) {
+            builder.setFullScreenIntent(contentPendingIntent, true)
+        }
 
         if (callState == CallStateEnum.ACTIVE && callStartTimeMs > 0L) {
             builder.setWhen(callStartTimeMs)
@@ -478,11 +510,13 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(context, CHANNEL_ASSISTANT)
+        return NotificationCompat.Builder(context, CHANNEL_SCHEDULED_ALERTS)
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setContentTitle("Scheduled Call: $targetName")
             .setContentText("$phoneNumber • $reason")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(dialPendingIntent)
             .addAction(android.R.drawable.ic_menu_call, "Call Now", dialPendingIntent)

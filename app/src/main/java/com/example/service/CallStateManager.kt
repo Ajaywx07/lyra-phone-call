@@ -1,10 +1,16 @@
 package com.example.service
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.media.AudioManager
+import android.os.Build
 import android.telecom.CallAudioState
+import android.telecom.TelecomManager
 import com.example.data.local.entity.CallSummary
 import com.example.data.repository.CallRepository
 import com.example.domain.model.CallStateEnum
 import com.example.domain.model.CallerInfo
+import com.example.utils.PermissionHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +25,7 @@ import kotlinx.coroutines.launch
 
 interface TelecomCallBridge {
     fun answerCall()
-    fun rejectOrDisconnectCall()
+    fun rejectOrDisconnectCall(): Boolean
     fun toggleHold(hold: Boolean)
     fun applyMute(muted: Boolean)
     fun setSpeaker(speaker: Boolean)
@@ -34,6 +40,12 @@ object CallStateManager {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var timerJob: Job? = null
     private var telecomBridge: TelecomCallBridge? = null
+    @Volatile
+    private var appContext: Context? = null
+
+    fun bindApplicationContext(context: Context) {
+        appContext = context.applicationContext ?: context
+    }
 
     private val _callState = MutableStateFlow(CallStateEnum.IDLE)
     val callState: StateFlow<CallStateEnum> = _callState.asStateFlow()
@@ -229,24 +241,81 @@ object CallStateManager {
     }
 
     /**
-     * Silently routes an incoming call internally into Voicemail screening:
-     * answers the Telecom call if active, mutes the owner's microphone, and enters VOICEMAIL state.
+     * Routes an incoming call internally into Voicemail screening:
+     * answers the Telecom call if ringing, prepares acoustic speaker/mic bridge so the greeting
+     * is audible on speaker (instead of muted), and enters VOICEMAIL state.
      */
+    @Suppress("DEPRECATION")
     fun routeToVoicemail() {
         timerJob?.cancel()
         if (_callState.value == CallStateEnum.RINGING) {
             telecomBridge?.answerCall()
         }
         _isRingerSilenced.value = false
-        _isMuted.value = true
-        telecomBridge?.applyMute(true)
         _callState.value = CallStateEnum.VOICEMAIL
         _callStartTimeMs.value = System.currentTimeMillis()
         _callDurationSeconds.value = 0L
+        setVoicemailAcousticBridge(speakingGreeting = true)
+    }
+
+    /**
+     * Controls native acoustic bridging during Voicemail screening:
+     * - speakingGreeting = true: speaker ON + mic UNMUTED so TTS greeting & beep reach uplink TX
+     * - speakingGreeting = false: speaker ON + mic MUTED so owner room audio stays silent while caller is recorded
+     */
+    @Suppress("DEPRECATION")
+    fun setVoicemailAcousticBridge(speakingGreeting: Boolean) {
+        val shouldMute = !speakingGreeting
+        _isMuted.value = shouldMute
+        _isSpeakerOn.value = true
+        _currentAudioRoute.value = CallAudioState.ROUTE_SPEAKER
+
+        val bridge = telecomBridge
+        if (bridge != null) {
+            runCatching { bridge.applyMute(shouldMute) }
+            runCatching { bridge.setSpeaker(true) }
+        }
+        val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (am != null) {
+            runCatching {
+                am.isMicrophoneMute = shouldMute
+                am.isSpeakerphoneOn = true
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    fun restoreAfterVoicemail() {
+        val bridge = telecomBridge
+        if (bridge != null) {
+            runCatching { bridge.applyMute(false) }
+            runCatching { bridge.setSpeaker(false) }
+        }
+        val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (am != null) {
+            runCatching {
+                am.isMicrophoneMute = false
+                am.isSpeakerphoneOn = false
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun terminateLiveTelecomCall() {
+        if (_isSimulatedCall.value) return
+        val handledByBridge = runCatching { telecomBridge?.rejectOrDisconnectCall() == true }.getOrDefault(false)
+        if (!handledByBridge && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val ctx = appContext
+            if (ctx != null && PermissionHelper.hasAnswerCallsPermission(ctx)) {
+                val tm = ctx.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                runCatching { tm?.endCall() }
+            }
+        }
     }
 
     fun cancelDialingOrUnconnectedCall() {
-        runCatching { telecomBridge?.rejectOrDisconnectCall() }
+        terminateLiveTelecomCall()
         clearState()
     }
 
@@ -255,7 +324,10 @@ object CallStateManager {
             cancelDialingOrUnconnectedCall()
             return
         }
-        runCatching { telecomBridge?.rejectOrDisconnectCall() }
+        if (_callState.value == CallStateEnum.VOICEMAIL) {
+            restoreAfterVoicemail()
+        }
+        terminateLiveTelecomCall()
         onCallEnded(callRepository, onSummaryReady)
     }
 
@@ -364,9 +436,9 @@ object CallStateManager {
         }
         if (_callState.value != CallStateEnum.VOICEMAIL) {
             _isMuted.value = muted
+            _isSpeakerOn.value = speakerOn
+            _currentAudioRoute.value = route
         }
-        _isSpeakerOn.value = speakerOn
-        _currentAudioRoute.value = route
         _supportedAudioRoutes.value = supportedRoutes
         recomputeBluetoothAvailability()
     }
@@ -440,6 +512,9 @@ object CallStateManager {
     @Suppress("DEPRECATION")
     fun clearState() {
         timerJob?.cancel()
+        if (_callState.value == CallStateEnum.VOICEMAIL) {
+            restoreAfterVoicemail()
+        }
         _callState.value = CallStateEnum.IDLE
         _currentCaller.value = null
         _isOutgoingCall.value = false

@@ -54,7 +54,11 @@ class AudioRecorderManager(private val context: Context) {
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
     @SuppressLint("MissingPermission")
-    fun startRecording(scope: CoroutineScope, onMaxLimitReached: () -> Unit = {}) {
+    fun startRecording(
+        scope: CoroutineScope,
+        preferVoiceRecognition: Boolean = false,
+        onMaxLimitReached: () -> Unit = {}
+    ) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -72,18 +76,8 @@ class AudioRecorderManager(private val context: Context) {
         }
 
         val bufferSize = maxOf(minBufferSize * 2, 4096)
-        val recorder = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            SAMPLE_RATE,
-            CHANNEL_CONFIG,
-            AUDIO_FORMAT,
-            bufferSize
-        )
-
-        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-            recorder.release()
-            throw IllegalStateException("Failed to initialize microphone AudioRecord.")
-        }
+        val recorder = createBestAudioRecord(bufferSize, preferVoiceRecognition)
+            ?: throw IllegalStateException("Failed to initialize microphone AudioRecord.")
 
         audioRecord = recorder
         recorder.startRecording()
@@ -120,6 +114,28 @@ class AudioRecorderManager(private val context: Context) {
                 Log.e(TAG, "Error while reading audio stream", e)
             }
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun createBestAudioRecord(
+        bufferSize: Int,
+        preferVoiceRecognition: Boolean
+    ): AudioRecord? {
+        val sources = if (preferVoiceRecognition) {
+            intArrayOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC)
+        } else {
+            intArrayOf(MediaRecorder.AudioSource.MIC)
+        }
+        for (source in sources) {
+            val candidate = runCatching {
+                AudioRecord(source, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
+            }.getOrNull() ?: continue
+            if (candidate.state == AudioRecord.STATE_INITIALIZED) {
+                return candidate
+            }
+            runCatching { candidate.release() }
+        }
+        return null
     }
 
     fun stopAndBuildWav(): ByteArray {

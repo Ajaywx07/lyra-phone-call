@@ -33,6 +33,7 @@ import com.example.ui.screens.VoicemailScreen
 import com.example.ui.theme.LyraTheme
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LyraMainViewModel
+import com.example.utils.configureAppCheck
 
 /**
  * Dedicated independent Activity for Incoming, Active, and Voicemail calls.
@@ -46,6 +47,7 @@ class CallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         configureLockScreenWindow()
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         NotificationHelper.createNotificationChannels(this)
         handleCallActionIntent(intent)
@@ -161,6 +163,7 @@ class CallActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        configureAppCheck(this, intent)
         handleCallActionIntent(intent)
     }
 
@@ -179,6 +182,10 @@ class CallActivity : ComponentActivity() {
         when (launchIntent?.action) {
             "ACTION_INCOMING_CALL" -> {
                 CallStateManager.setFullScreenIncomingUiVisible(true)
+            }
+            "ACTION_OUTGOING_CALL" -> {
+                // Outgoing call displays inside CallActivity above lock screen without dismissing keyguard.
+                CallStateManager.setFullScreenIncomingUiVisible(false)
             }
             "ACTION_ACCEPT_CALL" -> {
                 CallStateManager.setFullScreenIncomingUiVisible(false)

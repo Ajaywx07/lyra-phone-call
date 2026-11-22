@@ -47,6 +47,8 @@ import com.example.service.QuickSmsService
 import com.example.service.SmsDispatchHelper
 import com.example.ui.theme.AppThemeStyle
 import com.example.utils.AudioRecorderManager
+import com.example.utils.GitHubReleaseInfo
+import com.example.utils.GitHubUpdateManager
 import com.example.utils.GoogleAuthHelper
 import com.example.utils.GoogleSignInOutcome
 import com.example.utils.MediaCropTransform
@@ -55,9 +57,10 @@ import com.example.utils.PhoneNumberUtils
 import com.example.utils.ProfileMediaStorage
 import com.example.utils.SimManager
 import com.example.utils.SimSlotInfo
+import com.example.utils.UpdateCheckResult
 import com.example.utils.VoicemailEngine
+import com.example.utils.ensureFirebaseInitialized
 import com.google.firebase.Firebase
-import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
@@ -125,7 +128,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val database = LyraDatabase.getDatabase(context)
     val preferences = LyraPreferences(context)
     private val aiRepository = LocalRuleBasedAiRepository()
-    private val voicemailAiRepository = UniversalVoicemailAiRepository()
+    private val voicemailAiRepository = UniversalVoicemailAiRepository(context)
     private val voicemailRecorder = AudioRecorderManager(context)
     private val inCallRecorder = AudioRecorderManager(context)
     private val voicemailEngine = VoicemailEngine(context)
@@ -158,7 +161,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     )
 
     private val isFirebaseInitialized: Boolean
-        get() = runCatching { FirebaseApp.getApps(context).isNotEmpty() }.getOrDefault(false)
+        get() = ensureFirebaseInitialized(context)
 
     private val cloudBackupRepository: CloudBackupRepository? by lazy {
         if (isFirebaseInitialized) {
@@ -485,6 +488,24 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     private val _backupStatus = MutableStateFlow<String?>(null)
     val backupStatus: StateFlow<String?> = _backupStatus.asStateFlow()
 
+    // GitHub Releases App Update State
+    val githubUpdateRepo: StateFlow<String> = preferences.githubUpdateRepo
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LyraPreferences.DEFAULT_GITHUB_UPDATE_REPO)
+
+    val skippedUpdateVersion: StateFlow<String> = preferences.skippedUpdateVersion
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    private val _availableUpdate = MutableStateFlow<GitHubReleaseInfo?>(null)
+    val availableUpdate: StateFlow<GitHubReleaseInfo?> = _availableUpdate.asStateFlow()
+
+    private val _isCheckingUpdates = MutableStateFlow(false)
+    val isCheckingUpdates: StateFlow<Boolean> = _isCheckingUpdates.asStateFlow()
+
+    private val _updateCheckStatus = MutableStateFlow<String?>(null)
+    val updateCheckStatus: StateFlow<String?> = _updateCheckStatus.asStateFlow()
+
+    private var hasRunStartupUpdateCheck = false
+
     init {
         loadData()
         refreshAudioDeviceAvailability()
@@ -494,6 +515,72 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             runCatching { ScheduledCallScheduler.rescheduleAllPending(context) }
         }
+    }
+
+    fun checkForAppUpdatesIfStartupPending() {
+        if (hasRunStartupUpdateCheck) return
+        hasRunStartupUpdateCheck = true
+        checkForAppUpdates(manual = false)
+    }
+
+    fun checkForAppUpdates(manual: Boolean = true) {
+        if (_isCheckingUpdates.value) return
+        val repoSlug = githubUpdateRepo.value.trim()
+        if (repoSlug.isBlank()) {
+            if (manual) _updateCheckStatus.value = "Enter a GitHub repository (owner/repo) first."
+            return
+        }
+        viewModelScope.launch {
+            _isCheckingUpdates.value = true
+            if (manual) _updateCheckStatus.value = "Checking GitHub Releases..."
+            when (val result = GitHubUpdateManager.checkLatestRelease(repoSlug)) {
+                is UpdateCheckResult.UpdateAvailable -> {
+                    val skipped = skippedUpdateVersion.value
+                    if (manual || skipped != result.release.tagName) {
+                        _availableUpdate.value = result.release
+                    }
+                    _updateCheckStatus.value = "Update ${result.release.tagName} available!"
+                }
+                is UpdateCheckResult.UpToDate -> {
+                    if (manual) {
+                        _updateCheckStatus.value = "Lyra v${result.currentVersion} is up to date ✓"
+                    }
+                }
+                is UpdateCheckResult.Error -> {
+                    if (manual) {
+                        _updateCheckStatus.value = result.message
+                    }
+                }
+            }
+            _isCheckingUpdates.value = false
+        }
+    }
+
+    fun setGitHubUpdateRepo(repoSlug: String) {
+        viewModelScope.launch {
+            preferences.setGithubUpdateRepo(repoSlug)
+            _updateCheckStatus.value = "Update repository saved ✓"
+        }
+    }
+
+    fun skipUpdateVersion(tagName: String) {
+        viewModelScope.launch {
+            preferences.setSkippedUpdateVersion(tagName)
+            _availableUpdate.value = null
+        }
+    }
+
+    fun dismissUpdatePrompt() {
+        _availableUpdate.value = null
+    }
+
+    fun openAvailableUpdate(release: GitHubReleaseInfo): Boolean {
+        val opened = GitHubUpdateManager.openReleaseInBrowser(context, release)
+        _availableUpdate.value = null
+        if (!opened) {
+            _updateCheckStatus.value = "Could not open browser for ${release.htmlUrl}"
+        }
+        return opened
     }
 
     fun refreshAudioDeviceAvailability() {
@@ -1176,17 +1263,21 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     ) {
         val cleanNumber = PhoneNumberUtils.normalize(phoneNumber)
         if (cleanNumber.isBlank()) return
+        val normalizedTime = ScheduledCallScheduler.normalizeToMinuteStart(scheduledAtMillis)
+            .let { if (it <= System.currentTimeMillis()) scheduledAtMillis else it }
         viewModelScope.launch {
             val entity = ScheduledCall(
                 contactName = contactName.ifBlank { cleanNumber },
                 phoneNumber = cleanNumber,
                 simKey = simKey,
-                scheduledAtMillis = scheduledAtMillis,
+                scheduledAtMillis = normalizedTime,
                 status = "PENDING",
-                statusMessage = "Scheduled via AlarmManager"
+                statusMessage = "Arming alarm..."
             )
             val id = scheduledCallDao.insertScheduledCall(entity)
-            ScheduledCallScheduler.scheduleAlarm(context, entity.copy(id = id))
+            val saved = entity.copy(id = id)
+            val result = ScheduledCallScheduler.scheduleAlarm(context, saved)
+            scheduledCallDao.updateScheduledCall(saved.copy(statusMessage = result.diagnosticMessage))
         }
     }
 
@@ -1199,18 +1290,20 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     ) {
         val cleanNumber = PhoneNumberUtils.normalize(phoneNumber)
         if (cleanNumber.isBlank()) return
+        val normalizedTime = ScheduledCallScheduler.normalizeToMinuteStart(scheduledAtMillis)
+            .let { if (it <= System.currentTimeMillis()) scheduledAtMillis else it }
         viewModelScope.launch {
             ScheduledCallScheduler.cancelAlarm(context, existing.id)
             val updated = existing.copy(
                 contactName = contactName.ifBlank { cleanNumber },
                 phoneNumber = cleanNumber,
                 simKey = simKey,
-                scheduledAtMillis = scheduledAtMillis,
+                scheduledAtMillis = normalizedTime,
                 status = "PENDING",
-                statusMessage = "Schedule updated"
+                statusMessage = "Updating alarm..."
             )
-            scheduledCallDao.updateScheduledCall(updated)
-            ScheduledCallScheduler.scheduleAlarm(context, updated)
+            val result = ScheduledCallScheduler.scheduleAlarm(context, updated)
+            scheduledCallDao.updateScheduledCall(updated.copy(statusMessage = result.diagnosticMessage))
         }
     }
 
@@ -1254,18 +1347,21 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
 
         voicemailJob = viewModelScope.launch {
             try {
-                // Step 1: Play custom Lyra greeting
+                // Step 1: Play custom Lyra greeting over unmuted Speaker Acoustic Bridge
+                CallStateManager.setVoicemailAcousticBridge(speakingGreeting = true)
                 _voicemailPhase.value = VoicemailPhase.SPEAKING_GREETING
                 voicemailEngine.speakGreeting(greeting)
 
-                // Step 2: Play voicemail beep
+                // Step 2: Play voicemail beep while still unmuted on speaker bridge
                 _voicemailPhase.value = VoicemailPhase.PLAYING_BEEP
                 voicemailEngine.playVoicemailBeep()
 
-                // Step 3: Record caller audio locally
+                // Step 3: Mute owner room mic, keep speaker ON, and record caller via VOICE_RECOGNITION source
+                CallStateManager.setVoicemailAcousticBridge(speakingGreeting = false)
                 _voicemailPhase.value = VoicemailPhase.RECORDING_MESSAGE
                 voicemailRecorder.startRecording(
                     scope = viewModelScope,
+                    preferVoiceRecognition = true,
                     onMaxLimitReached = { stopVoicemailRecordingAndSummarize() }
                 )
 
@@ -1277,10 +1373,12 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SecurityException) {
+                CallStateManager.restoreAfterVoicemail()
                 _voicemailPhase.value = VoicemailPhase.ERROR
                 _voicemailError.value = e.localizedMessage
                     ?: "Microphone permission (RECORD_AUDIO) is required to record voicemail locally."
             } catch (e: Exception) {
+                CallStateManager.restoreAfterVoicemail()
                 _voicemailPhase.value = VoicemailPhase.ERROR
                 _voicemailError.value = e.localizedMessage
                     ?: "Unable to start voicemail recording for ${caller.displayName}."
