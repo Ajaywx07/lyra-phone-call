@@ -17,10 +17,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.database.LyraDatabase
 import com.example.data.local.entity.CallNote
+import com.example.data.local.entity.CallRecording
 import com.example.data.local.entity.CallSummary
 import com.example.data.local.entity.ScheduledCall
 import com.example.data.local.entity.VoicemailEntry
 import com.example.data.local.preferences.LyraPreferences
+import com.example.data.repository.CallRecordingRepository
+import com.example.domain.model.CallRecordingCapability
+import com.example.domain.model.RecordingPlaybackState
+import com.example.service.CallRecordingCoordinator
+import com.example.utils.CallRecordingPlayer
 import com.example.service.ScheduledCallScheduler
 import com.example.data.remote.CloudContactBackup
 import com.example.data.repository.CallLogRepository
@@ -158,6 +164,20 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         database.priorityContactDao(),
         aiRepository
     )
+    val callRecordingRepository = CallRecordingRepository(database.callRecordingDao())
+    private val callRecordingPlayer = CallRecordingPlayer(viewModelScope)
+
+    val allCallRecordings: StateFlow<List<CallRecording>> = callRecordingRepository.allRecordings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val callRecordingCapability: StateFlow<CallRecordingCapability> = MutableStateFlow(
+        callRecordingRepository.getCapability()
+    ).asStateFlow()
+
+    val recordingPlaybackState: StateFlow<RecordingPlaybackState> = callRecordingPlayer.playbackState
+
+    private val _recordingActionMessage = MutableStateFlow<String?>(null)
+    val recordingActionMessage: StateFlow<String?> = _recordingActionMessage.asStateFlow()
 
     private val isFirebaseInitialized: Boolean
         get() = ensureFirebaseInitialized(context)
@@ -1520,6 +1540,70 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         _voicemailError.value = null
     }
 
+    fun playRecording(recording: CallRecording) {
+        callRecordingPlayer.play(context, recording)
+    }
+
+    fun pauseRecording() {
+        callRecordingPlayer.pause()
+    }
+
+    fun resumeRecording() {
+        callRecordingPlayer.resume()
+    }
+
+    fun stopRecordingPlayback() {
+        callRecordingPlayer.stop()
+    }
+
+    fun seekRecordingPlayback(positionMs: Long) {
+        callRecordingPlayer.seekTo(positionMs)
+    }
+
+    fun deleteRecording(recording: CallRecording) {
+        viewModelScope.launch {
+            try {
+                if (recordingPlaybackState.value.recordingId == recording.id) {
+                    callRecordingPlayer.stop()
+                }
+                callRecordingRepository.deleteRecording(context, recording)
+                _recordingActionMessage.value = "Recording deleted"
+            } catch (e: Exception) {
+                _recordingActionMessage.value = "Failed to delete recording: ${e.message}"
+            }
+        }
+    }
+
+    fun shareRecording(ctx: Context, recording: CallRecording) {
+        try {
+            val shareIntent = callRecordingRepository.createShareIntent(ctx, recording).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ctx.startActivity(Intent.createChooser(shareIntent, "Share Call Recording").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        } catch (_: Exception) {
+            _recordingActionMessage.value = "Unable to share recording"
+        }
+    }
+
+    fun clearRecordingActionMessage() {
+        _recordingActionMessage.value = null
+    }
+
+    fun startManualCallRecording(ctx: Context, callerName: String, callerNumber: String): Boolean {
+        return CallRecordingCoordinator.startRecording(ctx, callerName, callerNumber)
+    }
+
+    fun stopManualCallRecording(ctx: Context) {
+        viewModelScope.launch {
+            val rec = CallRecordingCoordinator.stopRecording(ctx)
+            if (rec != null) {
+                _recordingActionMessage.value = "Recording saved: ${rec.fileName}"
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         voicemailJob?.cancel()
@@ -1527,5 +1611,6 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         runCatching { audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback) }
         voicemailRecorder.cancelRecording()
         voicemailEngine.release()
+        callRecordingPlayer.release()
     }
 }

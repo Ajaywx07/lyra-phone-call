@@ -111,3 +111,21 @@ interface ScheduledCallDao {
     @Query("DELETE FROM scheduled_calls WHERE id = :id")
     suspend fun deleteScheduledCallById(id: Long)
 }
+
+@Dao
+interface CallRecordingDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecording(recording: com.example.data.local.entity.CallRecording): Long
+
+    @Delete
+    suspend fun deleteRecording(recording: com.example.data.local.entity.CallRecording)
+
+    @Query("SELECT * FROM call_recordings ORDER BY timestamp DESC")
+    fun getAllRecordings(): Flow<List<com.example.data.local.entity.CallRecording>>
+
+    @Query("SELECT * FROM call_recordings WHERE id = :id LIMIT 1")
+    suspend fun getRecordingById(id: Long): com.example.data.local.entity.CallRecording?
+
+    @Query("DELETE FROM call_recordings WHERE id = :id")
+    suspend fun deleteRecordingById(id: Long)
+}

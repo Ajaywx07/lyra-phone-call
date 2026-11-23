@@ -7,11 +7,13 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.local.dao.CallNoteDao
+import com.example.data.local.dao.CallRecordingDao
 import com.example.data.local.dao.CallSummaryDao
 import com.example.data.local.dao.PriorityContactDao
 import com.example.data.local.dao.ScheduledCallDao
 import com.example.data.local.dao.VoicemailDao
 import com.example.data.local.entity.CallNote
+import com.example.data.local.entity.CallRecording
 import com.example.data.local.entity.CallSummary
 import com.example.data.local.entity.PriorityContact
 import com.example.data.local.entity.ScheduledCall
@@ -23,9 +25,10 @@ import com.example.data.local.entity.VoicemailEntry
         CallSummary::class,
         PriorityContact::class,
         VoicemailEntry::class,
-        ScheduledCall::class
+        ScheduledCall::class,
+        CallRecording::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class LyraDatabase : RoomDatabase() {
@@ -34,6 +37,7 @@ abstract class LyraDatabase : RoomDatabase() {
     abstract fun priorityContactDao(): PriorityContactDao
     abstract fun voicemailDao(): VoicemailDao
     abstract fun scheduledCallDao(): ScheduledCallDao
+    abstract fun callRecordingDao(): CallRecordingDao
 
     companion object {
         @Volatile
@@ -59,6 +63,26 @@ abstract class LyraDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `call_recordings` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `callerName` TEXT NOT NULL,
+                        `callerNumber` TEXT NOT NULL,
+                        `fileName` TEXT NOT NULL,
+                        `mediaStoreUri` TEXT NOT NULL,
+                        `relativePath` TEXT NOT NULL,
+                        `durationSeconds` INTEGER NOT NULL,
+                        `fileSizeBytes` INTEGER NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        `captureSource` TEXT NOT NULL,
+                        `isTwoWayAudio` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): LyraDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -66,7 +90,7 @@ abstract class LyraDatabase : RoomDatabase() {
                     LyraDatabase::class.java,
                     "lyra_calling_assistant.db"
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance

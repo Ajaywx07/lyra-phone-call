@@ -183,4 +183,15 @@
     <string name="about_privacy_points">1. Lyra डिफ़ॉल्ट रूप से स्थानीय और ऑफ़लाइन काम करता है।\n2. आपके निजी संपर्क बिना अनुमति बाहरी सर्वर पर अपलोड नहीं होते।\n3. वॉइसमेल ग्रीटिंग और ट्रांसक्रिप्ट पूरी तरह इस डिवाइस पर सुरक्षित रहते हैं।\n4. सभी नोट्स, सारांश और प्राथमिकता टैग डिवाइस पर रहते हैं।\n5. Google Play और न्यूनतम-अधिकार मानकों का पालन करता है।</string>
     <string name="about_frameworks_header">फ़्रेमवर्क और टूलिंग</string>
     <string name="about_native_stack">नेटिव Android स्टैक</string>
+
+    <string name="title_call_recordings">कॉल रिकॉर्डिंग्स</string>
+    <string name="recording_disclaimer_notice">Android प्लेटफ़ॉर्म प्रतिबंध सिस्टम डायलर के बिना सीधे दो-तरफ़ा लाइन-इन रिकॉर्डिंग को सीमित करते हैं; ऑडियो माइक्रोफ़ोन और लाउडस्पीकर के माध्यम से रिकॉर्ड किया जाता है।</string>
+    <string name="recording_play">चलाएं</string>
+    <string name="recording_pause">रोकें</string>
+    <string name="recording_share">शेयर करें</string>
+    <string name="recording_delete">हटाएं</string>
+    <string name="recording_delete_confirm">रिकॉर्डिंग हटाएं</string>
+    <string name="recording_delete_message">क्या आप वाकई इस रिकॉर्डिंग को हटाना चाहते हैं?</string>
+    <string name="no_recordings_found">अभी तक कोई कॉल रिकॉर्डिंग नहीं है</string>
+    <string name="recording_empty_subtitle">कॉल के दौरान बनाई गई रिकॉर्डिंग यहां दिखाई देंगी।</string>
 </resources>

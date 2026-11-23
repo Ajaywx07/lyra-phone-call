@@ -183,4 +183,15 @@
     <string name="about_privacy_points">1. Lyra operates strictly offline and locally by default.\n2. Never uploads private contacts to external servers.\n3. Voicemail greetings and transcripts stay strictly private on this device.\n4. All notes, summaries, and priority tags stay on this device.\n5. Complies with Google Play policies and least-privilege standards.</string>
     <string name="about_frameworks_header">Frameworks &amp; Tooling</string>
     <string name="about_native_stack">Native Android Stack</string>
+
+    <string name="title_call_recordings">Call Recordings</string>
+    <string name="recording_disclaimer_notice">Android platform restrictions limit direct two-way line-in recording on non-system dialers; audio is recorded via microphone and loudspeaker.</string>
+    <string name="recording_play">Play</string>
+    <string name="recording_pause">Pause</string>
+    <string name="recording_share">Share</string>
+    <string name="recording_delete">Delete</string>
+    <string name="recording_delete_confirm">Delete Recording</string>
+    <string name="recording_delete_message">Are you sure you want to delete this recording?</string>
+    <string name="no_recordings_found">No Call Recordings Yet</string>
+    <string name="recording_empty_subtitle">Recordings created during calls will appear here.</string>
 </resources>

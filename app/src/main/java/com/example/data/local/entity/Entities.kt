@@ -90,3 +90,22 @@ data class ScheduledCall(
     val lastAttemptMillis: Long = 0L,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
+
+/**
+ * Entity representing a recorded phone call saved locally in shared MediaStore storage.
+ */
+@Entity(tableName = "call_recordings")
+data class CallRecording(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val callerName: String,
+    val callerNumber: String,
+    val fileName: String,
+    val mediaStoreUri: String,
+    val relativePath: String,
+    val durationSeconds: Long,
+    val fileSizeBytes: Long,
+    val timestamp: Long = System.currentTimeMillis(),
+    val captureSource: String = "MIC",
+    val isTwoWayAudio: Boolean = false
+)

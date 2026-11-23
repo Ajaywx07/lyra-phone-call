@@ -17,15 +17,19 @@ import com.example.domain.model.CallStateEnum
 import com.example.domain.model.CallerInfo
 import com.example.service.CallStateManager
 import com.example.service.TelecomCallBridge
-import com.example.ui.components.InCallMoreOptionsSheet
+import com.example.data.local.database.LyraDatabase
+import com.example.data.local.entity.CallRecording
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.ActiveCallScreen
 import com.example.ui.screens.CallHistoryScreen
+import com.example.ui.screens.CallRecordingsScreen
 import com.example.ui.screens.DialerScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.PermissionsScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LyraMainViewModel
+import com.example.utils.CallRecordingStorage
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -125,101 +129,68 @@ class LyraFixesAndLocalizationTest {
     }
 
     @Test
-    fun callRecording_isCompletelyRemovedOnActiveCallAndMoreSheet() {
+    fun callRecording_integration_modelDaoStorageCoordinatorAndScreenAgree() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val viewModel = LyraMainViewModel(app)
-        val screenStep = androidx.compose.runtime.mutableIntStateOf(0)
+        val db = LyraDatabase.getDatabase(app)
+        val recordingDao = db.callRecordingDao()
 
-        CallStateManager.onIncomingCall(
-            caller = CallerInfo(
-                phoneNumber = "+919876543210",
-                formattedNumber = "+91 98765 43210",
-                displayName = "Boss",
-                isKnown = true,
-                isPriority = true
-            ),
-            isSimulated = true
+        // 1. Model & Room DAO integration test
+        val recording = CallRecording(
+            callerName = "Ajay",
+            callerNumber = "+919876543210",
+            fileName = "2026-11-22_143015_Ajay_9876543210.wav",
+            mediaStoreUri = "content://media/external/audio/media/101",
+            relativePath = "Recordings/Lyra",
+            durationSeconds = 45L,
+            fileSizeBytes = 3_969_044L,
+            timestamp = System.currentTimeMillis(),
+            captureSource = "MIC",
+            isTwoWayAudio = false
         )
-        CallStateManager.onCallAnswered()
+        val insertedId = recordingDao.insertRecording(recording)
+        assertTrue(insertedId > 0)
+        val retrieved = recordingDao.getRecordingById(insertedId)
+        assertEquals("Ajay", retrieved?.callerName)
+        assertEquals("+919876543210", retrieved?.callerNumber)
+        assertEquals("2026-11-22_143015_Ajay_9876543210.wav", retrieved?.fileName)
 
+        // 2. Storage helper accesses callerName and fileName and formats properly
+        val generatedName = CallRecordingStorage.generateFileName("Ajay", "+919876543210")
+        assertTrue(generatedName.contains("Ajay"))
+        assertTrue(generatedName.endsWith(".wav"))
+
+        val unknownName = CallRecordingStorage.generateFileName(null, "")
+        assertTrue(unknownName.contains("Unknown"))
+
+        val shareIntent = CallRecordingStorage.createShareIntent(app, retrieved!!)
+        assertEquals("audio/wav", shareIntent.type)
+
+        // 3. ViewModel exposes allCallRecordings, callRecordingCapability, recordingPlaybackState, and recordingActionMessage
+        val viewModel = LyraMainViewModel(app)
+        assertTrue(viewModel.callRecordingCapability.value.isSupported)
+        assertFalse(viewModel.recordingPlaybackState.value.isPlaying)
+        assertEquals(null, viewModel.recordingActionMessage.value)
+
+        // 4. CallRecordingsScreen renders with capability notice, recordings list, play button, share button, and delete button
         composeTestRule.setContent {
             MyApplicationTheme {
-                when (screenStep.intValue) {
-                    0 -> ActiveCallScreen(
-                        viewModel = viewModel,
-                        onEndCall = {},
-                        onCancelCall = {}
-                    )
-                    1 -> InCallMoreOptionsSheet(
-                        isHold = false,
-                        conferenceParticipantCount = 1,
-                        canMergeConference = false,
-                        isConferenceMerged = false,
-                        currentAudioRoute = CallAudioState.ROUTE_EARPIECE,
-                        isBluetoothAvailable = false,
-                        onToggleHold = {},
-                        onAddCallClick = {},
-                        onMergeConference = {},
-                        onSelectAudioRoute = {},
-                        onDismiss = {}
-                    )
-                    2 -> HomeScreen(
-                        viewModel = viewModel,
-                        onNavigateToDialer = {},
-                        onNavigateToHistory = {},
-                        onNavigateToContacts = {},
-                        onNavigateToSettings = {},
-                        onNavigateToPermissions = {},
-                        onNavigateToAbout = {},
-                        onNavigateToIncomingCall = {},
-                        onNavigateToScheduledCalls = {},
-                        onNavigateToVoicemail = {},
-                        onNavigateTab = {}
-                    )
-                    3 -> CallHistoryScreen(
-                        viewModel = viewModel,
-                        onBackClick = {},
-                        onNavigateTab = {}
-                    )
-                    else -> PermissionsScreen(
-                        viewModel = viewModel,
-                        onBackClick = {}
-                    )
-                }
+                CallRecordingsScreen(
+                    viewModel = viewModel,
+                    onBackClick = {}
+                )
             }
         }
+        composeTestRule.waitForIdle()
 
-        // 1. ActiveCallScreen must not render any Record button or label
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("call_action_Record").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("active_call_recording_badge").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("call_action_Mute").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("call_action_Audio").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("recordings_back_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("call_recordings_list").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("call_recording_item_${insertedId}").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("recording_play_btn_${insertedId}").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("recording_share_btn_${insertedId}").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("recording_delete_btn_${insertedId}").assertIsDisplayed()
 
-        // 2. More Options Sheet must omit any call recording row
-        screenStep.intValue = 1
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("more_option_record").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("more_option_conference").assertIsDisplayed()
-
-        // 3. HomeScreen must have Voicemail card intact and zero Call Recordings card
-        screenStep.intValue = 2
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("home_voicemail_card").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("home_call_recordings_card").assertDoesNotExist()
-
-        // 4. CallHistoryScreen must have no Recordings shortcut
-        screenStep.intValue = 3
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("history_open_recordings_btn").assertDoesNotExist()
-
-        // 5. PermissionsScreen must show Microphone (Voicemail) and no Shared Storage recordings card
-        screenStep.intValue = 4
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("permissions_screen").performScrollToNode(hasText("Microphone (Voicemail)"))
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Microphone (Voicemail)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Shared Storage (Lyra/Recordings)").assertDoesNotExist()
+        // Clean up test database record
+        recordingDao.deleteRecordingById(insertedId)
     }
 
     @Test

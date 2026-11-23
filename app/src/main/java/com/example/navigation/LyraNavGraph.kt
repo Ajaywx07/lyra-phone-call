@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.ActiveCallScreen
 import com.example.ui.screens.CallHistoryScreen
+import com.example.ui.screens.CallRecordingsScreen
 import com.example.ui.screens.CallSummaryScreen
 import com.example.ui.screens.ContactDetailsScreen
 import com.example.ui.screens.ContactsScreen
@@ -249,6 +250,13 @@ fun LyraNavGraph(
             AboutScreen(
                 onBackClick = { navController.popBackStack() },
                 viewModel = viewModel
+            )
+        }
+
+        composable(LyraDestinations.RECORDINGS) {
+            CallRecordingsScreen(
+                viewModel = viewModel,
+                onBackClick = { navController.popBackStack() }
             )
         }
     }
