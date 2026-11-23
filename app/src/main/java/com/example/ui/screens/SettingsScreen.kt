@@ -148,6 +148,9 @@ fun SettingsScreen(
     val accessibilityAutomationEnabled by viewModel.accessibilityAutomationEnabled.collectAsStateWithLifecycle()
     val ussdDirectHandlerEnabled by viewModel.ussdDirectHandlerEnabled.collectAsStateWithLifecycle()
     val showMostFrequentContacts by viewModel.showMostFrequentContacts.collectAsStateWithLifecycle()
+    val monthlyStatsAutoResetEnabled by viewModel.monthlyStatsAutoResetEnabled.collectAsStateWithLifecycle()
+    val keypadToneEnabled by viewModel.keypadToneEnabled.collectAsStateWithLifecycle()
+    val keypadVoiceAnnouncementEnabled by viewModel.keypadVoiceAnnouncementEnabled.collectAsStateWithLifecycle()
     val autoReplyMasterEnabled by viewModel.autoReplyMasterEnabled.collectAsStateWithLifecycle()
     val activeAutoReplyMode by viewModel.activeAutoReplyMode.collectAsStateWithLifecycle()
     val accessibilityServiceConnected by viewModel.accessibilityServiceConnected.collectAsStateWithLifecycle()
@@ -427,6 +430,9 @@ fun SettingsScreen(
                 val activeCount = listOf(
                     showLyraLogoOnIncoming,
                     showMostFrequentContacts,
+                    monthlyStatsAutoResetEnabled,
+                    keypadToneEnabled,
+                    keypadVoiceAnnouncementEnabled,
                     ussdDirectHandlerEnabled,
                     accessibilityAutomationEnabled,
                     perms.deviceAdminActive || perms.deviceOwnerActive,
@@ -435,7 +441,7 @@ fun SettingsScreen(
                 ExpandableSettingsModule(
                     moduleKey = "custom_features",
                     title = "Custom Features & Security",
-                    summary = "Logo toggle • Frequent callers • USSD • DND & Uninstall lock",
+                    summary = "Frequent top 20 • Monthly reset • Keypad audio • DND",
                     icon = Icons.Default.Tune,
                     expanded = customFeaturesExpanded,
                     onToggleExpand = { customFeaturesExpanded = !customFeaturesExpanded },
@@ -449,6 +455,12 @@ fun SettingsScreen(
                         onShowLyraLogoChange = { viewModel.setShowLyraLogoOnIncoming(it) },
                         showMostFrequentContacts = showMostFrequentContacts,
                         onShowMostFrequentChange = { viewModel.setShowMostFrequentContacts(it) },
+                        monthlyStatsAutoResetEnabled = monthlyStatsAutoResetEnabled,
+                        onMonthlyStatsAutoResetChange = { viewModel.setMonthlyStatsAutoResetEnabled(it) },
+                        keypadToneEnabled = keypadToneEnabled,
+                        onKeypadToneChange = { viewModel.setKeypadToneEnabled(it) },
+                        keypadVoiceAnnouncementEnabled = keypadVoiceAnnouncementEnabled,
+                        onKeypadVoiceAnnouncementChange = { viewModel.setKeypadVoiceAnnouncementEnabled(it) },
                         ussdDirectHandlerEnabled = ussdDirectHandlerEnabled,
                         onUssdDirectHandlerChange = { viewModel.setUssdDirectHandlerEnabled(it) },
                         accessibilityAutomationEnabled = accessibilityAutomationEnabled,

@@ -103,6 +103,7 @@ fun HomeScreen(
     val dashboardMediaType by viewModel.dashboardMediaType.collectAsStateWithLifecycle()
     val dashboardMediaCrop by viewModel.dashboardMediaCrop.collectAsStateWithLifecycle()
     val unreadMissedCount by viewModel.unreadMissedCallCount.collectAsStateWithLifecycle()
+    val monthlyStatsAutoResetEnabled by viewModel.monthlyStatsAutoResetEnabled.collectAsStateWithLifecycle()
 
     val colors = LyraTheme.colors
     var pendingPickedMediaUri by remember { mutableStateOf<Uri?>(null) }
@@ -143,7 +144,7 @@ fun HomeScreen(
                 LyraTopBar(
                     title = stringResource(R.string.home_title),
                     subtitle = stringResource(R.string.home_subtitle),
-                    statusText = if (isLyraEnabled) stringResource(R.string.home_status_online) else stringResource(R.string.home_status_standby),
+                    statusText = "",
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     trailingActions = {
                         Surface(
@@ -259,6 +260,19 @@ fun HomeScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                             }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (monthlyStatsAutoResetEnabled) {
+                                    "Live Call Stats • Auto-resets on 1st at 00:00"
+                                } else {
+                                    "Live Call Stats • Cumulative total"
+                                },
+                                color = colors.textMuted,
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.testTag("home_stats_cycle_label")
+                            )
                         }
                     }
                 }

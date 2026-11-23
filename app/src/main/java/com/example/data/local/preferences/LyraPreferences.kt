@@ -102,6 +102,10 @@ class LyraPreferences(private val context: Context) {
         val KEY_SHOW_MOST_FREQUENT_CONTACTS = booleanPreferencesKey("show_most_frequent_contacts")
         val KEY_AUTO_REPLY_MASTER_ENABLED = booleanPreferencesKey("auto_reply_master_enabled")
         val KEY_ACTIVE_AUTO_REPLY_MODE_ID = stringPreferencesKey("active_auto_reply_mode_id")
+        val KEY_MONTHLY_STATS_AUTO_RESET = booleanPreferencesKey("monthly_stats_auto_reset")
+        val KEY_LAST_STATS_RESET_MONTH = stringPreferencesKey("last_stats_reset_month")
+        val KEY_KEYPAD_TONE_ENABLED = booleanPreferencesKey("keypad_tone_enabled")
+        val KEY_KEYPAD_VOICE_ENABLED = booleanPreferencesKey("keypad_voice_announcement_enabled")
 
         @Volatile
         private var cachedIncomingSnapshot: IncomingCallSettingsSnapshot? = null
@@ -356,6 +360,22 @@ class LyraPreferences(private val context: Context) {
 
     val activeAutoReplyModeId: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_ACTIVE_AUTO_REPLY_MODE_ID] ?: ""
+    }
+
+    val monthlyStatsAutoResetEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_MONTHLY_STATS_AUTO_RESET] ?: true
+    }
+
+    val lastStatsResetMonthKey: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_LAST_STATS_RESET_MONTH] ?: ""
+    }
+
+    val keypadToneEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_KEYPAD_TONE_ENABLED] ?: true
+    }
+
+    val keypadVoiceAnnouncementEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_KEYPAD_VOICE_ENABLED] ?: false
     }
 
     suspend fun getIncomingCallSettingsSnapshot(forceRefresh: Boolean = false): IncomingCallSettingsSnapshot {
@@ -644,6 +664,30 @@ class LyraPreferences(private val context: Context) {
             prefs[KEY_AUTO_REPLY_MASTER_ENABLED] = masterEnabled
             prefs[KEY_ACTIVE_AUTO_REPLY_MODE_ID] = activeModeId
             snapshotFromPreferences(prefs)
+        }
+    }
+
+    suspend fun setMonthlyStatsAutoResetEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_MONTHLY_STATS_AUTO_RESET] = enabled
+        }
+    }
+
+    suspend fun setLastStatsResetMonthKey(monthKey: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_STATS_RESET_MONTH] = monthKey
+        }
+    }
+
+    suspend fun setKeypadToneEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_KEYPAD_TONE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setKeypadVoiceAnnouncementEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_KEYPAD_VOICE_ENABLED] = enabled
         }
     }
 }

@@ -41,12 +41,14 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
@@ -59,6 +61,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SimCard
@@ -1417,6 +1420,12 @@ fun CustomFeaturesModuleBody(
     onShowLyraLogoChange: (Boolean) -> Unit,
     showMostFrequentContacts: Boolean,
     onShowMostFrequentChange: (Boolean) -> Unit,
+    monthlyStatsAutoResetEnabled: Boolean,
+    onMonthlyStatsAutoResetChange: (Boolean) -> Unit,
+    keypadToneEnabled: Boolean,
+    onKeypadToneChange: (Boolean) -> Unit,
+    keypadVoiceAnnouncementEnabled: Boolean,
+    onKeypadVoiceAnnouncementChange: (Boolean) -> Unit,
     ussdDirectHandlerEnabled: Boolean,
     onUssdDirectHandlerChange: (Boolean) -> Unit,
     accessibilityAutomationEnabled: Boolean,
@@ -1439,11 +1448,38 @@ fun CustomFeaturesModuleBody(
         CapsuleGroupDivider()
         CapsuleToggle(
             title = "Most Frequent Connected Contacts",
-            subtitle = "Show top callers ranked strictly by connected calls (> 0s) on Contacts tab",
+            subtitle = "Show top 20 callers ranked by connected calls & talk time below dialpad & in Contacts",
             icon = Icons.Default.Groups,
             checked = showMostFrequentContacts,
             onCheckedChange = onShowMostFrequentChange,
             testTag = "toggle_most_frequent_contacts"
+        )
+        CapsuleGroupDivider()
+        CapsuleToggle(
+            title = "Monthly Counter & Dashboard Auto-Reset",
+            subtitle = "Automatically reset Most Frequent & Dashboard counters on 1st of every month at 00:00",
+            icon = Icons.Default.CalendarMonth,
+            checked = monthlyStatsAutoResetEnabled,
+            onCheckedChange = onMonthlyStatsAutoResetChange,
+            testTag = "toggle_monthly_auto_reset"
+        )
+        CapsuleGroupDivider()
+        CapsuleToggle(
+            title = "Keypad Spoken Number Voice",
+            subtitle = "Speak dialed digits aloud with instant interruption for lag-free fast typing",
+            icon = Icons.Default.RecordVoiceOver,
+            checked = keypadVoiceAnnouncementEnabled,
+            onCheckedChange = onKeypadVoiceAnnouncementChange,
+            testTag = "toggle_keypad_voice_announcement"
+        )
+        CapsuleGroupDivider()
+        CapsuleToggle(
+            title = "Keypad Button Press Sounds",
+            subtitle = "Play crisp DTMF touch-tone sound on dialpad key press",
+            icon = Icons.Default.GraphicEq,
+            checked = keypadToneEnabled,
+            onCheckedChange = onKeypadToneChange,
+            testTag = "toggle_keypad_tone_sound"
         )
         CapsuleGroupDivider()
         CapsuleToggle(

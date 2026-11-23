@@ -109,6 +109,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.domain.model.CallHistoryItemData
 import com.example.domain.model.ContactItemData
+import com.example.domain.model.FrequentContactItem
 import com.example.domain.model.UssdUiState
 import com.example.navigation.LyraDestinations
 import com.example.ui.components.CapsuleStatusChip
@@ -118,6 +119,7 @@ import com.example.ui.components.LyraBottomNavBar
 import com.example.ui.components.LyraContactAvatar
 import com.example.ui.components.LyraTopBar
 import com.example.ui.components.OuterCapsuleContainer
+import com.example.ui.components.SectionHeader
 import com.example.ui.components.SimChooserDialog
 import com.example.ui.components.shouldPromptForSim
 import com.example.ui.theme.AmberPriority
@@ -144,8 +146,58 @@ internal data class DialerSuggestion(
     val isPriority: Boolean,
     val isOwner: Boolean,
     val isRecentCall: Boolean,
+    val isFrequent: Boolean = false,
+    val frequentRank: Int? = null,
     val contact: ContactItemData? = null
 )
+
+private fun formatTalkTimeCompact(totalSeconds: Long): String {
+    val hrs = totalSeconds / 3600L
+    val mins = (totalSeconds % 3600L) / 60L
+    val secs = totalSeconds % 60L
+    return when {
+        hrs > 0L -> "${hrs}h ${mins}m"
+        mins > 0L -> "${mins}m ${secs}s"
+        else -> "${secs}s"
+    }
+}
+
+internal fun buildDialerSuggestionsWithFrequent(
+    dialedNumber: String,
+    contacts: List<ContactItemData>,
+    callLog: List<CallHistoryItemData>,
+    mostFrequentContacts: List<FrequentContactItem>,
+    showMostFrequentContacts: Boolean,
+    maxFrequentCount: Int = 20
+): List<DialerSuggestion> {
+    if (dialedNumber.isNotBlank()) {
+        return buildDialerMatchingSuggestions(dialedNumber, contacts, callLog)
+    }
+    if (showMostFrequentContacts && mostFrequentContacts.isNotEmpty()) {
+        val contactsByNormalized = contacts.associateBy {
+            PhoneNumberUtils.normalize(it.phoneNumber).ifBlank { it.phoneNumber.trim() }
+        }
+        return mostFrequentContacts.take(maxFrequentCount).mapIndexed { idx, freq ->
+            val matchedContact = contactsByNormalized[freq.normalizedNumber]
+                ?: contacts.firstOrNull { PhoneNumberUtils.areNumbersEqual(it.phoneNumber, freq.phoneNumber) }
+            val callWord = if (freq.connectedCallCount == 1) "call" else "calls"
+            DialerSuggestion(
+                id = "freq_${freq.normalizedNumber}_$idx",
+                displayName = freq.displayName,
+                phoneNumber = freq.phoneNumber,
+                photoUri = freq.photoUri ?: matchedContact?.photoUri,
+                subtitle = "${freq.connectedCallCount} $callWord • ${formatTalkTimeCompact(freq.totalDurationSeconds)}",
+                isPriority = freq.isPriority || (matchedContact?.isPriority == true),
+                isOwner = freq.isOwner || (matchedContact?.isOwner == true),
+                isRecentCall = false,
+                isFrequent = true,
+                frequentRank = idx + 1,
+                contact = matchedContact
+            )
+        }
+    }
+    return buildDialerMatchingSuggestions("", contacts, callLog)
+}
 
 internal fun buildDialerMatchingSuggestions(
     dialedNumber: String,
@@ -423,6 +475,8 @@ fun DialerScreen(
 
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val callLog by viewModel.callLog.collectAsStateWithLifecycle()
+    val mostFrequentContacts by viewModel.mostFrequentContacts.collectAsStateWithLifecycle()
+    val showMostFrequentContacts by viewModel.showMostFrequentContacts.collectAsStateWithLifecycle()
     val availableSims by viewModel.availableSims.collectAsStateWithLifecycle()
     val preferredSim by viewModel.preferredSim.collectAsStateWithLifecycle()
     val fixDefaultSim by viewModel.fixDefaultSim.collectAsStateWithLifecycle()
@@ -445,12 +499,25 @@ fun DialerScreen(
         }
     }
 
-    val matchingSuggestions by remember(dialedNumber, contacts, callLog) {
+    val isShowingMostFrequent = dialedNumber.isBlank() &&
+        showMostFrequentContacts &&
+        mostFrequentContacts.isNotEmpty()
+
+    val matchingSuggestions by remember(
+        dialedNumber,
+        contacts,
+        callLog,
+        mostFrequentContacts,
+        showMostFrequentContacts
+    ) {
         derivedStateOf {
-            buildDialerMatchingSuggestions(
+            buildDialerSuggestionsWithFrequent(
                 dialedNumber = dialedNumber,
                 contacts = contacts,
-                callLog = callLog
+                callLog = callLog,
+                mostFrequentContacts = mostFrequentContacts,
+                showMostFrequentContacts = showMostFrequentContacts,
+                maxFrequentCount = 20
             )
         }
     }
@@ -617,14 +684,17 @@ fun DialerScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = if (dialedNumber.isNotBlank()) {
-                                                stringResource(
+                                            text = when {
+                                                dialedNumber.isNotBlank() -> stringResource(
                                                     R.string.dialer_matches_for,
                                                     dialedNumber,
                                                     matchingSuggestions.size
                                                 )
-                                            } else {
-                                                stringResource(
+                                                isShowingMostFrequent -> stringResource(
+                                                    R.string.dialer_most_frequent_count,
+                                                    matchingSuggestions.size
+                                                )
+                                                else -> stringResource(
                                                     R.string.dialer_contacts_and_recent,
                                                     matchingSuggestions.size
                                                 )
@@ -679,6 +749,14 @@ fun DialerScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                     contentPadding = PaddingValues(bottom = 14.dp)
                                 ) {
+                                    if (isShowingMostFrequent) {
+                                        item(key = "dialer_most_frequent_header") {
+                                            SectionHeader(
+                                                title = "Most Frequent (${matchingSuggestions.size}/20)",
+                                                modifier = Modifier.testTag("dialer_most_frequent_header")
+                                            )
+                                        }
+                                    }
                                     items(matchingSuggestions, key = { it.id }) { suggestion ->
                                         ExpandedSuggestionRow(
                                             suggestion = suggestion,
@@ -1011,14 +1089,17 @@ fun DialerScreen(
                                                     key = key,
                                                     buttonSize = keySize,
                                                     onClick = {
+                                                        viewModel.onDialpadKeyFeedback(key.digit)
                                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                         insertDialToken(key.digit)
                                                     },
                                                     onLongClick = {
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         if (key.digit == "0") {
+                                                            viewModel.onDialpadKeyFeedback("+")
                                                             insertDialToken("+")
                                                         } else if (key.digit == "1") {
+                                                            viewModel.onDialpadKeyFeedback("1")
                                                             setDialNumber("*86")
                                                         }
                                                     }
@@ -1474,7 +1555,9 @@ private fun TopDialerSuggestionCard(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        if (suggestion.isRecentCall) {
+                        if (suggestion.isFrequent && suggestion.frequentRank != null) {
+                            CapsuleStatusChip(text = "#${suggestion.frequentRank}", color = colors.primary)
+                        } else if (suggestion.isRecentCall) {
                             CapsuleStatusChip(text = "Recent", color = colors.secondary)
                         } else if (suggestion.isPriority) {
                             CapsuleStatusChip(text = "★ VIP", color = AmberPriority)
@@ -1542,12 +1625,12 @@ private fun ExpandedSuggestionRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 64.dp)
+            .height(62.dp)
             .testTag("dialer_expanded_item_${suggestion.id}")
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -1585,7 +1668,9 @@ private fun ExpandedSuggestionRow(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        if (suggestion.isOwner) {
+                        if (suggestion.isFrequent && suggestion.frequentRank != null) {
+                            CapsuleStatusChip(text = "#${suggestion.frequentRank}", color = colors.primary)
+                        } else if (suggestion.isOwner) {
                             CapsuleStatusChip(text = "Owner", color = colors.primary)
                         } else if (suggestion.isPriority) {
                             CapsuleStatusChip(text = "★ VIP", color = AmberPriority)

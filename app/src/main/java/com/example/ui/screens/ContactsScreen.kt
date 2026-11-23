@@ -3,7 +3,6 @@ package com.example.ui.screens
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,7 +63,6 @@ import com.example.domain.model.ContactItemData
 import com.example.domain.model.FrequentContactItem
 import com.example.navigation.LyraDestinations
 import com.example.ui.components.LyraContactAvatar
-import com.example.ui.components.BadgeType
 import com.example.ui.components.CapsuleButton
 import com.example.ui.components.CapsuleFilterBar
 import com.example.ui.components.CapsuleSearchBar
@@ -80,7 +77,6 @@ import com.example.ui.components.LyraDeleteConfirmationDialog
 import com.example.ui.components.LyraTopBar
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.SimChooserDialog
-import com.example.ui.components.StatusBadge
 import com.example.ui.components.shouldPromptForSim
 import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.CrimsonDecline
@@ -101,10 +97,8 @@ fun ContactsScreen(
     val colors = LyraTheme.colors
     val uiState by contactsViewModel.uiState.collectAsStateWithLifecycle()
     val searchQuery by contactsViewModel.searchQuery.collectAsStateWithLifecycle()
-    val selectedFilter by contactsViewModel.selectedFilter.collectAsStateWithLifecycle()
+    val contactsViewModel_selectedFilter by contactsViewModel.selectedFilter.collectAsStateWithLifecycle()
     val hasContactsPermission by contactsViewModel.hasContactsPermission.collectAsStateWithLifecycle()
-    val lookupNumber by contactsViewModel.lookupPhoneNumber.collectAsStateWithLifecycle()
-    val identifiedCaller by contactsViewModel.identifiedCaller.collectAsStateWithLifecycle()
 
     val availableSims by mainViewModel.availableSims.collectAsStateWithLifecycle()
     val preferredSim by mainViewModel.preferredSim.collectAsStateWithLifecycle()
@@ -113,7 +107,6 @@ fun ContactsScreen(
     val mostFrequentContacts by mainViewModel.mostFrequentContacts.collectAsStateWithLifecycle()
     val showMostFrequentContacts by mainViewModel.showMostFrequentContacts.collectAsStateWithLifecycle()
 
-    var showCallerIdTester by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingContact by remember { mutableStateOf<ContactItemData?>(null) }
     var contextMenuContact by remember { mutableStateOf<ContactItemData?>(null) }
@@ -166,36 +159,6 @@ fun ContactsScreen(
                     onBackClick = onBackClick,
                     statusText = "",
                     trailingActions = {
-                        Surface(
-                            onClick = { showCallerIdTester = !showCallerIdTester },
-                            shape = CircleShape,
-                            color = if (showCallerIdTester) colors.secondary.copy(alpha = 0.22f) else colors.surfaceElevated,
-                            border = BorderStroke(
-                                1.dp,
-                                if (showCallerIdTester) colors.secondary else colors.glassBorder
-                            ),
-                            modifier = Modifier.testTag("toggle_caller_id_tester")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = "Caller ID Check",
-                                    tint = colors.secondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(
-                                    text = "ID",
-                                    color = colors.textPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
                         Surface(
                             onClick = { showAddDialog = true },
                             shape = CircleShape,
@@ -294,100 +257,11 @@ fun ContactsScreen(
             item {
                 CapsuleFilterBar(
                     items = ContactFilter.entries,
-                    selectedItem = selectedFilter,
+                    selectedItem = contactsViewModel_selectedFilter,
                     labelProvider = { it.label },
                     onSelect = { filter -> contactsViewModel.onFilterChange(filter) },
                     testTagPrefix = "filter_chip"
                 )
-            }
-
-            // Caller Identification Quick Tester
-            item {
-                AnimatedVisibility(visible = showCallerIdTester) {
-                    GlassCard(borderColor = colors.secondary.copy(alpha = 0.5f)) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = "Caller Identification Test",
-                                color = colors.textPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Enter any phone number (+91, 0-prefix, or 10 digits) to verify how Lyra classifies incoming callers.",
-                                color = colors.textSecondary,
-                                fontSize = 11.sp
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = lookupNumber,
-                                    onValueChange = { contactsViewModel.onLookupPhoneChange(it) },
-                                    placeholder = { Text("+91 98765 43210", color = colors.textMuted, fontSize = 12.sp) },
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = colors.secondary,
-                                        unfocusedBorderColor = colors.glassBorder,
-                                        focusedTextColor = colors.textPrimary,
-                                        unfocusedTextColor = colors.textPrimary
-                                    ),
-                                    shape = CircleShape,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("caller_lookup_input")
-                                )
-                                CapsuleButton(
-                                    text = "Identify",
-                                    containerColor = colors.secondary,
-                                    contentColor = colors.onSecondaryButton,
-                                    onClick = { contactsViewModel.identifyCaller() },
-                                    modifier = Modifier.testTag("run_caller_lookup_btn")
-                                )
-                            }
-
-                            identifiedCaller?.let { result ->
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Surface(
-                                    color = colors.surfaceElevated,
-                                    shape = RoundedCornerShape(18.dp),
-                                    border = BorderStroke(1.dp, colors.glassBorder)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = result.displayName,
-                                                color = colors.textPrimary,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "${result.formattedNumber} • ${result.contactLabel}",
-                                                color = colors.textSecondary,
-                                                fontSize = 11.sp
-                                            )
-                                        }
-                                        when {
-                                            result.isOwner -> StatusBadge(type = BadgeType.OWNER)
-                                            result.isPriority -> StatusBadge(type = BadgeType.PRIORITY)
-                                            result.isKnown -> StatusBadge(type = BadgeType.ALLOWED, customText = "Known")
-                                            else -> StatusBadge(type = BadgeType.UNKNOWN)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
 
             // Contact List States
@@ -440,7 +314,7 @@ fun ContactsScreen(
                     if (showMostFrequentContacts &&
                         mostFrequentContacts.isNotEmpty() &&
                         searchQuery.isBlank() &&
-                        selectedFilter == ContactFilter.ALL
+                        contactsViewModel_selectedFilter == ContactFilter.ALL
                     ) {
                         item(key = "most_frequent_header") {
                             SectionHeader(title = stringResource(R.string.contacts_most_frequent_title))

@@ -34,7 +34,7 @@ import com.example.data.local.entity.VoicemailEntry
         AutoReplyMode::class,
         CustomFeatureSettings::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class LyraDatabase : RoomDatabase() {
@@ -122,6 +122,15 @@ abstract class LyraDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE custom_feature_settings ADD COLUMN monthlyStatsAutoResetEnabled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE custom_feature_settings ADD COLUMN lastStatsResetMonthKey TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE custom_feature_settings ADD COLUMN keypadToneEnabled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE custom_feature_settings ADD COLUMN keypadVoiceAnnouncementEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): LyraDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -134,7 +143,8 @@ abstract class LyraDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
-                        MIGRATION_7_8
+                        MIGRATION_7_8,
+                        MIGRATION_8_9
                     )
                     .fallbackToDestructiveMigration(true)
                     .build()

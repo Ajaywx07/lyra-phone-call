@@ -60,6 +60,7 @@ import com.example.service.QuickSmsService
 import com.example.service.SmsDispatchHelper
 import com.example.ui.theme.AppThemeStyle
 import com.example.utils.AudioRecorderManager
+import com.example.utils.DialpadAudioFeedbackManager
 import com.example.utils.ExternalIntentHelper
 import com.example.utils.GitHubReleaseInfo
 import com.example.utils.GitHubUpdateManager
@@ -78,6 +79,8 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
+import java.util.Calendar
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -138,13 +141,54 @@ data class PermissionsState(
     val accessibilityEnabled: Boolean = false
 )
 
+internal fun computeCurrentMonthStartMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = nowMillis
+        set(Calendar.DAY_OF_MONTH, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+internal fun computeCurrentMonthKey(nowMillis: Long = System.currentTimeMillis()): String {
+    val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val year = cal.get(Calendar.YEAR)
+    val month = cal.get(Calendar.MONTH) + 1
+    return String.format(Locale.US, "%04d-%02d", year, month)
+}
+
+internal fun computeHomeStats(
+    callLogs: List<CallHistoryItemData>,
+    contacts: List<ContactItemData>,
+    monthlyAutoResetEnabled: Boolean,
+    nowMillis: Long = System.currentTimeMillis()
+): HomeStats {
+    val realContacts = contacts.filterNot { it.isDemoData }
+    val realLogs = callLogs.filterNot { it.isDemoData }
+    val cycleStartMillis = if (monthlyAutoResetEnabled) computeCurrentMonthStartMillis(nowMillis) else Long.MIN_VALUE
+    val cycleLogs = realLogs.filter { it.timestamp >= cycleStartMillis }
+
+    val missed = cycleLogs.count { it.callType == CallTypeEnum.MISSED }
+    val unknown = cycleLogs.count { it.contactName.isNullOrBlank() || it.contactName == "Unknown Caller" }
+    return HomeStats(
+        callsToday = cycleLogs.size,
+        missedCalls = missed,
+        knownCallers = realContacts.size,
+        unknownCallers = unknown
+    )
+}
+
 internal fun computeMostFrequentContacts(
     callLogs: List<CallHistoryItemData>,
     contacts: List<ContactItemData>,
-    limit: Int = 10
+    limit: Int = 20,
+    cycleStartMillis: Long? = null
 ): List<FrequentContactItem> {
-    if (callLogs.isEmpty()) return emptyList()
-    val contactsByNormalized = contacts.associateBy {
+    if (callLogs.isEmpty() || limit <= 0) return emptyList()
+    val realContacts = contacts.filterNot { it.isDemoData }
+    val contactsByNormalized = realContacts.associateBy {
         PhoneNumberUtils.normalize(it.phoneNumber).ifBlank { it.phoneNumber.trim() }
     }
     data class Acc(
@@ -160,6 +204,8 @@ internal fun computeMostFrequentContacts(
     )
     val grouped = LinkedHashMap<String, Acc>()
     for (entry in callLogs) {
+        if (entry.isDemoData) continue
+        if (cycleStartMillis != null && entry.timestamp < cycleStartMillis) continue
         val isConnectedType = entry.callType == CallTypeEnum.INCOMING || entry.callType == CallTypeEnum.OUTGOING
         if (!isConnectedType || entry.durationSeconds <= 0L) continue
 
@@ -229,6 +275,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     private val voicemailAiRepository = UniversalVoicemailAiRepository(context)
     private val voicemailRecorder = AudioRecorderManager(context)
     private val voicemailEngine = VoicemailEngine(context)
+    private val dialpadAudioFeedbackManager = DialpadAudioFeedbackManager(context)
     private val voicemailDao = database.voicemailDao()
     private val scheduledCallDao = database.scheduledCallDao()
     private var voicemailJob: Job? = null
@@ -297,6 +344,24 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val showMostFrequentContacts: StateFlow<Boolean> = customFeatureSettings
         .map { it.showMostFrequentContacts }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val monthlyStatsAutoResetEnabled: StateFlow<Boolean> = customFeatureSettings
+        .map { it.monthlyStatsAutoResetEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val keypadToneEnabled: StateFlow<Boolean> = customFeatureSettings
+        .map { it.keypadToneEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val keypadVoiceAnnouncementEnabled: StateFlow<Boolean> = customFeatureSettings
+        .map { it.keypadVoiceAnnouncementEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    private val _cycleReferenceNowMillis = MutableStateFlow(System.currentTimeMillis())
+
+    val currentStatsCycleMonthKey: StateFlow<String> = _cycleReferenceNowMillis
+        .map { computeCurrentMonthKey(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), computeCurrentMonthKey())
 
     val autoReplyMasterEnabled: StateFlow<Boolean> = customFeatureSettings
         .map { it.autoReplyMasterEnabled }
@@ -402,9 +467,21 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val mostFrequentContacts: StateFlow<List<FrequentContactItem>> = combine(
         _callLog,
         _contacts,
-        showMostFrequentContacts
-    ) { logs, contactsList, enabled ->
-        if (!enabled) emptyList() else computeMostFrequentContacts(logs, contactsList, limit = 10)
+        showMostFrequentContacts,
+        monthlyStatsAutoResetEnabled,
+        _cycleReferenceNowMillis
+    ) { logs, contactsList, enabled, autoResetEnabled, nowMillis ->
+        if (!enabled) {
+            emptyList()
+        } else {
+            val cycleStart = if (autoResetEnabled) computeCurrentMonthStartMillis(nowMillis) else null
+            computeMostFrequentContacts(
+                callLogs = logs,
+                contacts = contactsList,
+                limit = 20,
+                cycleStartMillis = cycleStart
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _callLogFilter = MutableStateFlow<CallTypeEnum?>(null)
@@ -439,16 +516,18 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // Home Stats
-    val homeStats: StateFlow<HomeStats> = _callLog.combine(_contacts) { logs, contactsList ->
-        val missed = logs.count { it.callType == CallTypeEnum.MISSED }
-        val known = contactsList.size
-        val unknown = logs.count { it.contactName == "Unknown Caller" || it.contactName == null }
-        HomeStats(
-            callsToday = logs.size,
-            missedCalls = missed,
-            knownCallers = known,
-            unknownCallers = unknown
+    // Home Stats (real calls & real contacts, with automatic 1st-of-month 00:00 cycle reset when enabled)
+    val homeStats: StateFlow<HomeStats> = combine(
+        _callLog,
+        _contacts,
+        monthlyStatsAutoResetEnabled,
+        _cycleReferenceNowMillis
+    ) { logs, contactsList, autoResetEnabled, nowMillis ->
+        computeHomeStats(
+            callLogs = logs,
+            contacts = contactsList,
+            monthlyAutoResetEnabled = autoResetEnabled,
+            nowMillis = nowMillis
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeStats())
 
@@ -688,7 +767,24 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
                 preferences.setUssdDirectHandlerEnabled(persisted.ussdDirectHandlerEnabled)
                 preferences.setShowMostFrequentContacts(persisted.showMostFrequentContacts)
                 preferences.setAutoReplyState(persisted.autoReplyMasterEnabled, persisted.activeAutoReplyModeId)
+                preferences.setMonthlyStatsAutoResetEnabled(persisted.monthlyStatsAutoResetEnabled)
+                preferences.setKeypadToneEnabled(persisted.keypadToneEnabled)
+                preferences.setKeypadVoiceAnnouncementEnabled(persisted.keypadVoiceAnnouncementEnabled)
+                if (persisted.keypadVoiceAnnouncementEnabled) {
+                    dialpadAudioFeedbackManager.warmUpVoice()
+                }
+                checkAndRenewMonthlyCycleIfNeeded()
             }
+        }
+    }
+
+    private suspend fun checkAndRenewMonthlyCycleIfNeeded(nowMillis: Long = System.currentTimeMillis()) {
+        val currentMonthKey = computeCurrentMonthKey(nowMillis)
+        _cycleReferenceNowMillis.value = nowMillis
+        val settings = autoReplyRepository.getSettingsOnce()
+        if (settings.monthlyStatsAutoResetEnabled && settings.lastStatsResetMonthKey != currentMonthKey) {
+            autoReplyRepository.updateFeatureSettings { it.copy(lastStatsResetMonthKey = currentMonthKey) }
+            preferences.setLastStatsResetMonthKey(currentMonthKey)
         }
     }
 
@@ -779,6 +875,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         if (!force && loadDataJob?.isActive == true) return
         loadDataJob?.cancel()
         loadDataJob = viewModelScope.launch {
+            runCatching { checkAndRenewMonthlyCycleIfNeeded() }
             val perms = withContext(Dispatchers.IO) { checkPermissions() }
             _permissionsState.value = perms
             val sims = withContext(Dispatchers.IO) { SimManager.getAvailableSims(context) }
@@ -791,6 +888,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshIfStale(minIntervalMs: Long = 8_000L) {
+        viewModelScope.launch { runCatching { checkAndRenewMonthlyCycleIfNeeded() } }
         val elapsed = android.os.SystemClock.elapsedRealtime() - lastLoadedAtMs
         if (lastLoadedAtMs == 0L || elapsed >= minIntervalMs) {
             loadData(force = false)
@@ -1244,6 +1342,43 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     fun setShowMostFrequentContacts(enabled: Boolean) = viewModelScope.launch {
         autoReplyRepository.updateFeatureSettings { it.copy(showMostFrequentContacts = enabled) }
         preferences.setShowMostFrequentContacts(enabled)
+    }
+
+    fun setMonthlyStatsAutoResetEnabled(enabled: Boolean) = viewModelScope.launch {
+        val nowMillis = System.currentTimeMillis()
+        val monthKey = computeCurrentMonthKey(nowMillis)
+        _cycleReferenceNowMillis.value = nowMillis
+        autoReplyRepository.updateFeatureSettings {
+            it.copy(
+                monthlyStatsAutoResetEnabled = enabled,
+                lastStatsResetMonthKey = if (enabled) monthKey else it.lastStatsResetMonthKey
+            )
+        }
+        preferences.setMonthlyStatsAutoResetEnabled(enabled)
+        if (enabled) {
+            preferences.setLastStatsResetMonthKey(monthKey)
+        }
+    }
+
+    fun setKeypadToneEnabled(enabled: Boolean) = viewModelScope.launch {
+        autoReplyRepository.updateFeatureSettings { it.copy(keypadToneEnabled = enabled) }
+        preferences.setKeypadToneEnabled(enabled)
+    }
+
+    fun setKeypadVoiceAnnouncementEnabled(enabled: Boolean) = viewModelScope.launch {
+        autoReplyRepository.updateFeatureSettings { it.copy(keypadVoiceAnnouncementEnabled = enabled) }
+        preferences.setKeypadVoiceAnnouncementEnabled(enabled)
+        if (enabled) {
+            dialpadAudioFeedbackManager.warmUpVoice()
+        }
+    }
+
+    fun onDialpadKeyFeedback(digit: String) {
+        dialpadAudioFeedbackManager.playDigitFeedback(
+            digit = digit,
+            playTone = keypadToneEnabled.value,
+            speakDigit = keypadVoiceAnnouncementEnabled.value
+        )
     }
 
     fun setAutoReplyMasterEnabled(enabled: Boolean) = viewModelScope.launch {
@@ -1868,6 +2003,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         runCatching { audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback) }
         voicemailRecorder.cancelRecording()
         voicemailEngine.release()
+        dialpadAudioFeedbackManager.release()
         callRecordingPlayer.release()
     }
 }

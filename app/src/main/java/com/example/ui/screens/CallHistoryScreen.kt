@@ -283,7 +283,7 @@ fun CallHistoryScreen(
                     subtitle = stringResource(R.string.recents_subtitle),
                     showBack = onNavigateTab == null,
                     onBackClick = onBackClick,
-                    statusText = "${displayedCalls.size} Calls"
+                    statusText = ""
                 )
             }
 

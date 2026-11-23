@@ -140,6 +140,10 @@ data class CustomFeatureSettings(
     val showMostFrequentContacts: Boolean = true,
     val autoReplyMasterEnabled: Boolean = false,
     val activeAutoReplyModeId: String = "",
+    val monthlyStatsAutoResetEnabled: Boolean = true,
+    val lastStatsResetMonthKey: String = "",
+    val keypadToneEnabled: Boolean = true,
+    val keypadVoiceAnnouncementEnabled: Boolean = false,
     val updatedAtMillis: Long = System.currentTimeMillis()
 )
 

@@ -28,6 +28,7 @@
     <string name="dialer_show_keypad">कीपैड दिखाएँ</string>
     <string name="dialer_collapse_suggestions">सूची बंद करें</string>
     <string name="dialer_matches_for">\"%1$s\" के परिणाम (%2$d)</string>
+    <string name="dialer_most_frequent_count">सर्वाधिक संपर्कित (%1$d/20)</string>
     <string name="dialer_contacts_and_recent">संपर्क और हाल ही के (%1$d)</string>
     <string name="dialer_keypad_label">कीपैड</string>
     <string name="dialer_no_matches">\"%1$s\" के लिए कोई संपर्क नहीं मिला।\nलौटने के लिए स्वाइप करें या कीपैड दबाएँ।</string>
