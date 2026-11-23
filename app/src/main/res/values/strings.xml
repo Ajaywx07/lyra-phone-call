@@ -1,3 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lyra</string>
+
+    <!-- Common Actions & Navigation -->
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_view">View</string>
+    <string name="action_details">Details</string>
+    <string name="action_close">Close</string>
+    <string name="action_hide">Hide</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_dialpad">Dialpad</string>
+    <string name="nav_recent">Recent</string>
+    <string name="nav_contacts">Contacts</string>
+    <string name="nav_lyra_ai">Lyra AI</string>
+
+    <!-- Dialer Screen -->
+    <string name="dialer_title">DIALPAD</string>
+    <string name="dialer_subtitle">Dual-SIM Phone &amp; Assistant</string>
+    <string name="dialer_status_ai_active">● AI Active</string>
+    <string name="dialer_sim_ask">Ask</string>
+    <string name="dialer_sim_1">SIM 1</string>
+    <string name="dialer_sim_2">SIM 2</string>
+    <string name="dialer_show_keypad">Show Keypad</string>
+    <string name="dialer_collapse_suggestions">Collapse Suggestions</string>
+    <string name="dialer_matches_for">Matches for \"%1$s\" (%2$d)</string>
+    <string name="dialer_contacts_and_recent">Contacts &amp; Recent (%1$d)</string>
+    <string name="dialer_keypad_label">Keypad</string>
+    <string name="dialer_no_matches">No matching contacts for \"%1$s\".\nSwipe or tap Keypad to return.</string>
+    <string name="dialer_input_hint">Dial number using keypad</string>
+    <string name="dialer_paste_number">Paste number</string>
+    <string name="dialer_paste_invalid">Only numeric phone numbers can be pasted</string>
+    <string name="dialer_clear_number">Clear number</string>
+    <string name="dialer_add_to_contacts">Add to Contacts</string>
+    <string name="dialer_place_call">Place Call</string>
+    <string name="dialer_save_to_contacts">Save to Contacts</string>
+    <string name="dialer_save_contact_btn">Save Contact</string>
+    <string name="dialer_number_prefix">Number: %1$s</string>
+
+    <!-- Home Screen -->
+    <string name="home_title">LYRA</string>
+    <string name="home_subtitle">Personal Calling Assistant</string>
+    <string name="home_status_online">● Lyra Online</string>
+    <string name="home_status_standby">○ Standby</string>
+    <string name="home_stat_calls">Calls</string>
+    <string name="home_stat_missed">Missed</string>
+    <string name="home_stat_known">Known</string>
+    <string name="home_stat_unknown">Unknown</string>
+    <string name="home_quick_keypad">Keypad</string>
+    <string name="home_quick_recents">Recents</string>
+    <string name="home_quick_contacts">Contacts</string>
+    <string name="home_quick_settings">Settings</string>
+    <string name="home_guard_title">Calling &amp; Background Guard</string>
+    <string name="home_guard_active_desc">Persistent Notification + Lock-Screen Call UI</string>
+    <string name="home_guard_paused_desc">Background Call Guard paused in Settings</string>
+    <string name="home_status_active">Active</string>
+    <string name="home_status_paused">Paused</string>
+    <string name="home_voicemail_title">Lyra AI Voicemail (%1$d)</string>
+    <string name="home_voicemail_subtitle">Local audio &amp; summary • %1$s</string>
+    <string name="home_voicemail_chip">Inbox</string>
+    <string name="home_scheduled_title">Scheduled Auto Calls (%1$d)</string>
+    <string name="home_scheduled_subtitle">Exact alarm triggers • SIM 1 / SIM 2 auto dial</string>
+    <string name="home_section_quick_nav">Quick Access &amp; Navigation</string>
+    <string name="home_call_history_title">Call History</string>
+    <string name="home_call_history_desc">Review all incoming, outgoing &amp; missed calls</string>
+    <string name="home_contacts_priority_title">Contacts &amp; Priority</string>
+    <string name="home_contacts_priority_desc">Manage Boss, Family, Doctor &amp; Favorite tags</string>
+    <string name="home_permissions_title">Permissions &amp; Default App</string>
+    <string name="home_permissions_desc">Default Dialer, Phone, Calls &amp; Overlay setup</string>
+    <string name="home_about_title">About Lyra</string>
+    <string name="home_about_desc">Developer ownership, privacy &amp; stack info</string>
+    <string name="home_test_live_call">Test Live Call UI</string>
+    <string name="home_preview_owner_call">Preview Owner Call</string>
+    <string name="home_preview_unknown_call">Preview Unknown</string>
+
+    <!-- Recents & Contacts Screens -->
+    <string name="recents_title">RECENTS</string>
+    <string name="recents_subtitle">Tap for profile • Long-press for options</string>
+    <string name="recents_filter_all">All</string>
+    <string name="recents_filter_incoming">Incoming</string>
+    <string name="recents_filter_outgoing">Outgoing</string>
+    <string name="recents_filter_missed">Missed</string>
+    <string name="recents_permission_title">Call Log Access Needed</string>
+    <string name="recents_permission_desc">Grant Call Log permission so Lyra displays real incoming, outgoing, missed, and rejected calls with contact photos.</string>
+    <string name="recents_grant_call_log">Grant Call Log</string>
+    <string name="contacts_title">CONTACTS</string>
+    <string name="contacts_subtitle">Tap for profile • Long-press to edit</string>
+
+    <!-- In-Call & Incoming Call Screens -->
+    <string name="call_direction_outgoing">OUTGOING CALL</string>
+    <string name="call_direction_active">ACTIVE CALL</string>
+    <string name="call_status_on_hold">Call On Hold</string>
+    <string name="call_status_calling_sim">Calling via %1$s...</string>
+    <string name="call_orb_on_hold">ON HOLD</string>
+    <string name="call_orb_dialing">DIALING...</string>
+    <string name="call_orb_assisting">LYRA ASSISTING</string>
+    <string name="call_action_mute">Mute</string>
+    <string name="call_action_unmute">Unmute</string>
+    <string name="call_action_audio">Audio</string>
+    <string name="call_action_keypad">Keypad</string>
+    <string name="call_action_merge">Merge</string>
+    <string name="call_action_add_call">Add Call</string>
+    <string name="call_action_hold">Hold</string>
+    <string name="call_action_resume">Resume</string>
+    <string name="call_action_more">More</string>
+    <string name="call_action_cancel_call">Cancel Call</string>
+    <string name="call_action_end_call">End Call</string>
+    <string name="call_simulate_answered">Tap to simulate call answered</string>
+    <string name="call_more_options_title">More Call Options</string>
+    <string name="call_more_options_subtitle">Conference, hold &amp; audio routing controls</string>
+    <string name="call_audio_output_header">AUDIO OUTPUT</string>
+    <string name="call_audio_route_picker_title">Choose Audio Output</string>
+    <string name="call_audio_earpiece">Earpiece</string>
+    <string name="call_audio_speaker">Speaker</string>
+    <string name="call_audio_bluetooth">Bluetooth</string>
+    <string name="call_dtmf_keypad_title">In-Call Keypad</string>
+    <string name="incoming_silence">Silence</string>
+    <string name="incoming_silenced">Silenced</string>
+    <string name="incoming_message">Message</string>
+    <string name="incoming_voicemail">Voicemail</string>
+    <string name="incoming_accept">Accept</string>
+    <string name="incoming_decline">Decline</string>
+    <string name="incoming_pick_up">Pick Up</string>
+
+    <!-- Permissions Screen -->
+    <string name="permissions_title">PERMISSIONS</string>
+    <string name="permissions_mic_voicemail_title">Microphone (Voicemail)</string>
+    <string name="permissions_mic_voicemail_desc">Records caller voicemails locally on your device.</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">SETTINGS</string>
+    <string name="settings_subtitle">Call Assistant Preferences</string>
+    <string name="settings_expand_all">Expand All</string>
+    <string name="settings_collapse_all">Collapse All</string>
+    <string name="settings_active_guard">Active Guard</string>
+    <string name="settings_standby">Standby</string>
+    <string name="settings_unknown_blocker_title">Unknown Call Blocker</string>
+    <string name="settings_footer_version">Lyra Calling Assistant v2.0</string>
+    <string name="settings_footer_owner">Owner: Ajay • Telecom &amp; AI Engine</string>
+
+    <!-- About Screen & Expandable Guide -->
+    <string name="about_title">ABOUT LYRA</string>
+    <string name="about_subtitle">Intelligence &amp; Specifications</string>
+    <string name="about_brand_title">LYRA CALLING ASSISTANT</string>
+    <string name="about_tagline">\"Your calls. Your privacy. Your assistant.\"</string>
+    <string name="about_guide_card_title">Guide, Framework &amp; App Details</string>
+    <string name="about_guide_card_subtitle">How to use, settings, best practices, framework &amp; build info</string>
+    <string name="about_guide_tap_expand">Tap to expand guide</string>
+    <string name="about_guide_tap_collapse">Tap to collapse</string>
+
+    <string name="about_guide_section_how_to_use">How to Use the App</string>
+    <string name="about_guide_body_how_to_use">1. Set Lyra as your Default Phone &amp; Caller ID/Spam app so incoming and outgoing calls route cleanly through Lyra.\n2. Use the Dialpad tab to select Ask / SIM 1 / SIM 2, enter digits, tap the Dialpad bottom button to toggle the keypad over your contacts list, or swipe down on suggestions to browse all contacts.\n3. Manage calls from the lock screen, floating banner, or in-call controls (Mute, Audio Output, Keypad, Hold, Add Call &amp; Merge).\n4. Use Lyra AI Voicemail to screen callers with a custom greeting and review transcripts &amp; summaries, or schedule exact automatic calls.</string>
+
+    <string name="about_guide_section_settings">Available Settings</string>
+    <string name="about_guide_body_settings">• Appearance &amp; Theme: Switch between iOS Glass, Liquid Dark, and Pure Light styles plus custom dashboard hero artwork.\n• Unknown Call Blocker: Toggle automatic screening or blocking for unknown numbers and commercial telemarketing prefixes.\n• AI Engine &amp; Voicemail: Configure Firebase AI Logic / Gemini or OpenAI-compatible models, API keys, and custom voicemail greetings.\n• Call Screen &amp; Alerts: Customize screen style, animations, full-screen lock-screen alerts, persistent notifications, vibration, and ringtone.\n• Dual-SIM &amp; Cloud Backup: Pin a default SIM slot and sign in with Google to back up and restore priority contacts.</string>
+
+    <string name="about_guide_section_recommended">Recommended / Best Settings</string>
+    <string name="about_guide_body_recommended">• Enable Default Dialer, Call Screening Role, Notifications, Display Over Other Apps, and Exact Alarms.\n• Set Battery Optimization to \"Don\'t optimise\" / Unrestricted so scheduled calls and background incoming alerts never sleep.\n• Keep Background Call Guard, Persistent Notification, and Full-Screen Incoming Screen enabled for reliable lock-screen pickup.\n• Turn on Show Contact Photos and Haptic/Vibration Feedback for faster caller recognition.</string>
+
+    <string name="about_guide_section_dos_donts">Do\'s &amp; Don\'ts</string>
+    <string name="about_guide_body_dos_donts">Do:\n• Keep Exact Alarm &amp; Notification permissions granted for scheduled calls and missed-call badges.\n• Configure SIM preference (Ask / SIM 1 / SIM 2) before scheduling automatic calls.\n\nDon\'t:\n• Do not restrict Lyra in OEM Battery Saver or force-stop background services during an active call.\n• Do not deny Microphone permission if you plan to capture caller voicemails.</string>
+
+    <string name="about_guide_section_framework">Usage Framework</string>
+    <string name="about_guide_body_framework">• UI &amp; State: Jetpack Compose (Material 3) with unidirectional StateFlow ViewModels and lifecycle-aware collection.\n• Telecom Core: Android InCallService, CallScreeningService, CallEndpoint / CallAudioState routing, and Foreground Service lifecycle.\n• Persistence: Room SQLite database for voicemails, notes, summaries, priority tags &amp; scheduled calls; Preferences DataStore for settings.\n• Scheduling &amp; AI: Exact AlarmManager (setAlarmClock) handoff + Firebase AI Logic / local fallback.</string>
+
+    <string name="about_guide_section_app_details">App Details</string>
+    <string name="about_guide_body_app_details">App Name: Lyra Calling Assistant\nVersion: %1$s (Build %2$d)\nPackage: com.ajay.lyra\nPlatform: Android (Min SDK 26 / Target SDK 36)\nLocalization: System-responsive resources (English &amp; Hindi)</string>
+
+    <string name="about_updates_header">App Updates (GitHub Releases)</string>
+    <string name="about_updates_channel">GitHub Release Channel</string>
+    <string name="about_updates_installed">Installed: v%1$s (Build %2$d)</string>
+    <string name="about_updates_repo_label">GitHub Repo (owner/repo)</string>
+    <string name="about_updates_save_repo">Save Repo</string>
+    <string name="about_updates_check">Check Updates</string>
+    <string name="about_updates_checking">Checking...</string>
+    <string name="about_ownership_header">Ownership &amp; Architecture</string>
+    <string name="about_privacy_header">Strict Privacy Pledge</string>
+    <string name="about_privacy_zero_cloud">Zero Cloud Leakage Guarantee</string>
+    <string name="about_privacy_points">1. Lyra operates strictly offline and locally by default.\n2. Never uploads private contacts to external servers.\n3. Voicemail greetings and transcripts stay strictly private on this device.\n4. All notes, summaries, and priority tags stay on this device.\n5. Complies with Google Play policies and least-privilege standards.</string>
+    <string name="about_frameworks_header">Frameworks &amp; Tooling</string>
+    <string name="about_native_stack">Native Android Stack</string>
 </resources>

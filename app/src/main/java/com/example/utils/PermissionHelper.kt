@@ -66,38 +66,6 @@ object PermissionHelper {
         return hasPermission(context, Manifest.permission.RECORD_AUDIO)
     }
 
-    /**
-     * Scoped Storage (Android 10+ / API 29+) lets Lyra write its own MediaStore audio recordings
-     * under Lyra/Recordings without READ/WRITE external storage permissions.
-     * Android 8-9 (API 26-28) requires WRITE_EXTERNAL_STORAGE to write into shared storage.
-     */
-    fun hasCallRecordingStoragePermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            true
-        } else {
-            hasPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
-    }
-
-    fun hasCallRecordingRequiredPermissions(context: Context): Boolean {
-        return hasMicrophonePermission(context) && hasCallRecordingStoragePermission(context)
-    }
-
-    fun hasCaptureAudioOutputPermission(context: Context): Boolean {
-        return hasPermission(context, "android.permission.CAPTURE_AUDIO_OUTPUT")
-    }
-
-    fun getCallRecordingRuntimePermissions(): Array<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            arrayOf(Manifest.permission.RECORD_AUDIO)
-        } else {
-            arrayOf(
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
-        }
-    }
-
     fun hasBluetoothPermission(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             hasPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
@@ -268,9 +236,6 @@ object PermissionHelper {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             list.add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            list.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
         return list.toTypedArray()
     }

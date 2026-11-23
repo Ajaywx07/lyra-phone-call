@@ -26,8 +26,8 @@ class LyraCallReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // When Lyra is the Default Dialer, LyraInCallService handles Telecom states directly.
-                if (PermissionHelper.isDefaultDialer(context)) {
+                // When Lyra is the Default Dialer or InCallService bridge is bound, LyraInCallService handles Telecom states directly.
+                if (PermissionHelper.isDefaultDialer(context) || CallStateManager.hasTelecomBridge()) {
                     return@launch
                 }
 

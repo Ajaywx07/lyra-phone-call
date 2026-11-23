@@ -693,11 +693,12 @@ fun CallActionButton(
     contentColor: Color = Color.White,
     size: Dp = 64.dp,
     iconSize: Dp = 28.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    testTagOverride: String? = null
 ) {
     val colors = LyraTheme.colors
     Column(
-        modifier = modifier.testTag("call_action_$label"),
+        modifier = modifier.testTag(testTagOverride ?: "call_action_$label"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(

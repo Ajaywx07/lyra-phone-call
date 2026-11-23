@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lyra</string>
+
+    <!-- सामान्य क्रियाएँ और नेविगेशन -->
+    <string name="action_back">वापस</string>
+    <string name="action_cancel">रद्द करें</string>
+    <string name="action_save">सहेजें</string>
+    <string name="action_delete">हटाएँ</string>
+    <string name="action_view">देखें</string>
+    <string name="action_details">विवरण</string>
+    <string name="action_close">बंद करें</string>
+    <string name="action_hide">छिपाएँ</string>
+
+    <!-- बॉटम नेविगेशन -->
+    <string name="nav_dialpad">डायलपैड</string>
+    <string name="nav_recent">हाल ही के</string>
+    <string name="nav_contacts">संपर्क</string>
+    <string name="nav_lyra_ai">Lyra AI</string>
+
+    <!-- डायलर स्क्रीन -->
+    <string name="dialer_title">डायलपैड</string>
+    <string name="dialer_subtitle">डुअल-सिम फ़ोन और सहायक</string>
+    <string name="dialer_status_ai_active">● AI सक्रिय</string>
+    <string name="dialer_sim_ask">पूछें</string>
+    <string name="dialer_sim_1">SIM 1</string>
+    <string name="dialer_sim_2">SIM 2</string>
+    <string name="dialer_show_keypad">कीपैड दिखाएँ</string>
+    <string name="dialer_collapse_suggestions">सूची बंद करें</string>
+    <string name="dialer_matches_for">\"%1$s\" के परिणाम (%2$d)</string>
+    <string name="dialer_contacts_and_recent">संपर्क और हाल ही के (%1$d)</string>
+    <string name="dialer_keypad_label">कीपैड</string>
+    <string name="dialer_no_matches">\"%1$s\" के लिए कोई संपर्क नहीं मिला।\nलौटने के लिए स्वाइप करें या कीपैड दबाएँ।</string>
+    <string name="dialer_input_hint">कीपैड से नंबर डायल करें</string>
+    <string name="dialer_paste_number">नंबर पेस्ट करें</string>
+    <string name="dialer_paste_invalid">केवल मान्य फ़ोन नंबर पेस्ट किए जा सकते हैं</string>
+    <string name="dialer_clear_number">नंबर साफ़ करें</string>
+    <string name="dialer_add_to_contacts">संपर्क में जोड़ें</string>
+    <string name="dialer_place_call">कॉल करें</string>
+    <string name="dialer_save_to_contacts">संपर्क में सहेजें</string>
+    <string name="dialer_save_contact_btn">संपर्क सहेजें</string>
+    <string name="dialer_number_prefix">नंबर: %1$s</string>
+
+    <!-- होम स्क्रीन -->
+    <string name="home_title">LYRA</string>
+    <string name="home_subtitle">व्यक्तिगत कॉलिंग सहायक</string>
+    <string name="home_status_online">● Lyra ऑनलाइन</string>
+    <string name="home_status_standby">○ स्टैंडबाय</string>
+    <string name="home_stat_calls">कॉल्स</string>
+    <string name="home_stat_missed">मिस्ड</string>
+    <string name="home_stat_known">ज्ञात</string>
+    <string name="home_stat_unknown">अज्ञात</string>
+    <string name="home_quick_keypad">कीपैड</string>
+    <string name="home_quick_recents">हाल ही के</string>
+    <string name="home_quick_contacts">संपर्क</string>
+    <string name="home_quick_settings">सेटिंग्स</string>
+    <string name="home_guard_title">कॉलिंग और बैकग्राउंड गार्ड</string>
+    <string name="home_guard_active_desc">स्थायी सूचना + लॉक-स्क्रीन कॉल UI</string>
+    <string name="home_guard_paused_desc">बैकग्राउंड कॉल गार्ड सेटिंग्स में रुका है</string>
+    <string name="home_status_active">सक्रिय</string>
+    <string name="home_status_paused">रुका हुआ</string>
+    <string name="home_voicemail_title">Lyra AI वॉइसमेल (%1$d)</string>
+    <string name="home_voicemail_subtitle">स्थानीय ऑडियो और सारांश • %1$s</string>
+    <string name="home_voicemail_chip">इनबॉक्स</string>
+    <string name="home_scheduled_title">निर्धारित ऑटो कॉल्स (%1$d)</string>
+    <string name="home_scheduled_subtitle">सटीक अलार्म ट्रिगर • SIM 1 / SIM 2 ऑटो डायल</string>
+    <string name="home_section_quick_nav">त्वरित पहुँच और नेविगेशन</string>
+    <string name="home_call_history_title">कॉल इतिहास</string>
+    <string name="home_call_history_desc">सभी इनकमिंग, आउटगोइंग और मिस्ड कॉल्स देखें</string>
+    <string name="home_contacts_priority_title">संपर्क और प्राथमिकता</string>
+    <string name="home_contacts_priority_desc">बॉस, परिवार, डॉक्टर और पसंदीदा टैग प्रबंधित करें</string>
+    <string name="home_permissions_title">अनुमतियाँ और डिफ़ॉल्ट ऐप</string>
+    <string name="home_permissions_desc">डिफ़ॉल्ट डायलर, फ़ोन, कॉल्स और ओवरले सेटअप</string>
+    <string name="home_about_title">Lyra के बारे में</string>
+    <string name="home_about_desc">डेवलपर स्वामित्व, गोपनीयता और तकनीकी विवरण</string>
+    <string name="home_test_live_call">लाइव कॉल UI परीक्षण</string>
+    <string name="home_preview_owner_call">ओनर कॉल प्रीव्यू</string>
+    <string name="home_preview_unknown_call">अज्ञात प्रीव्यू</string>
+
+    <!-- रीसेंट्स और संपर्क स्क्रीन -->
+    <string name="recents_title">हाल ही के</string>
+    <string name="recents_subtitle">प्रोफ़ाइल के लिए टैप • विकल्पों के लिए दबाए रखें</string>
+    <string name="recents_filter_all">सभी</string>
+    <string name="recents_filter_incoming">इनकमिंग</string>
+    <string name="recents_filter_outgoing">आउटगोइंग</string>
+    <string name="recents_filter_missed">मिस्ड</string>
+    <string name="recents_permission_title">कॉल लॉग अनुमति आवश्यक है</string>
+    <string name="recents_permission_desc">कॉल लॉग अनुमति दें ताकि Lyra वास्तविक इनकमिंग, आउटगोइंग और मिस्ड कॉल्स दिखा सके।</string>
+    <string name="recents_grant_call_log">अनुमति दें</string>
+    <string name="contacts_title">संपर्क</string>
+    <string name="contacts_subtitle">प्रोफ़ाइल के लिए टैप • संपादन के लिए दबाए रखें</string>
+
+    <!-- इन-कॉल और इनकमिंग स्क्रीन -->
+    <string name="call_direction_outgoing">आउटगोइंग कॉल</string>
+    <string name="call_direction_active">सक्रिय कॉल</string>
+    <string name="call_status_on_hold">कॉल होल्ड पर है</string>
+    <string name="call_status_calling_sim">%1$s से कॉल हो रही है...</string>
+    <string name="call_orb_on_hold">होल्ड पर</string>
+    <string name="call_orb_dialing">डायल हो रहा है...</string>
+    <string name="call_orb_assisting">LYRA सहायक सक्रिय</string>
+    <string name="call_action_mute">म्यूट</string>
+    <string name="call_action_unmute">अनम्यूट</string>
+    <string name="call_action_audio">ऑडियो</string>
+    <string name="call_action_keypad">कीपैड</string>
+    <string name="call_action_merge">मर्ज</string>
+    <string name="call_action_add_call">कॉल जोड़ें</string>
+    <string name="call_action_hold">होल्ड</string>
+    <string name="call_action_resume">जारी रखें</string>
+    <string name="call_action_more">अधिक</string>
+    <string name="call_action_cancel_call">कॉल रद्द करें</string>
+    <string name="call_action_end_call">कॉल समाप्त करें</string>
+    <string name="call_simulate_answered">सिमुलेटेड कॉल उत्तर के लिए टैप करें</string>
+    <string name="call_more_options_title">अन्य कॉल विकल्प</string>
+    <string name="call_more_options_subtitle">कॉन्फ़्रेंस, होल्ड और ऑडियो रूटिंग नियंत्रण</string>
+    <string name="call_audio_output_header">ऑडियो आउटपुट</string>
+    <string name="call_audio_route_picker_title">ऑडियो आउटपुट चुनें</string>
+    <string name="call_audio_earpiece">ईयरपीस</string>
+    <string name="call_audio_speaker">स्पीकर</string>
+    <string name="call_audio_bluetooth">ब्लूटूथ</string>
+    <string name="call_dtmf_keypad_title">इन-कॉल कीपैड</string>
+    <string name="incoming_silence">शांत करें</string>
+    <string name="incoming_silenced">शांत है</string>
+    <string name="incoming_message">संदेश</string>
+    <string name="incoming_voicemail">वॉइसमेल</string>
+    <string name="incoming_accept">उठाएँ</string>
+    <string name="incoming_decline">काटें</string>
+    <string name="incoming_pick_up">उठाएँ</string>
+
+    <!-- अनुमतियाँ स्क्रीन -->
+    <string name="permissions_title">अनुमतियाँ</string>
+    <string name="permissions_mic_voicemail_title">माइक्रोफ़ोन (वॉइसमेल)</string>
+    <string name="permissions_mic_voicemail_desc">कॉलर के वॉइसमेल संदेश आपके डिवाइस पर स्थानीय रूप से सहेजता है।</string>
+
+    <!-- सेटिंग्स स्क्रीन -->
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="settings_subtitle">कॉल सहायक प्राथमिकताएँ</string>
+    <string name="settings_expand_all">सभी खोलें</string>
+    <string name="settings_collapse_all">सभी बंद करें</string>
+    <string name="settings_active_guard">सक्रिय गार्ड</string>
+    <string name="settings_standby">स्टैंडबाय</string>
+    <string name="settings_unknown_blocker_title">अज्ञात कॉल ब्लॉकर</string>
+    <string name="settings_footer_version">Lyra Calling Assistant v2.0</string>
+    <string name="settings_footer_owner">Owner: Ajay • Telecom &amp; AI Engine</string>
+
+    <!-- About स्क्रीन और विस्तार योग्य गाइड -->
+    <string name="about_title">LYRA के बारे में</string>
+    <string name="about_subtitle">इंटेलिजेंस और तकनीकी विवरण</string>
+    <string name="about_brand_title">LYRA CALLING ASSISTANT</string>
+    <string name="about_tagline">\"आपकी कॉल्स। आपकी गोपनीयता। आपका सहायक।\"</string>
+    <string name="about_guide_card_title">गाइड, फ़्रेमवर्क और ऐप विवरण</string>
+    <string name="about_guide_card_subtitle">उपयोग विधि, सेटिंग्स, सर्वोत्तम सुझाव, फ़्रेमवर्क और बिल्ड जानकारी</string>
+    <string name="about_guide_tap_expand">विस्तार के लिए टैप करें</string>
+    <string name="about_guide_tap_collapse">समेटने के लिए टैप करें</string>
+
+    <string name="about_guide_section_how_to_use">ऐप का उपयोग कैसे करें</string>
+    <string name="about_guide_body_how_to_use">1. Lyra को डिफ़ॉल्ट फ़ोन और कॉलर ID ऐप के रूप में सेट करें ताकि सभी इनकमिंग और आउटगोइंग कॉल्स सही ढंग से रूट हों।\n2. डायलपैड टैब में Ask / SIM 1 / SIM 2 चुनें, नंबर लिखें, या नीचे डायलपैड बटन टैप करके कीपैड दिखाएँ/छिपाएँ।\n3. लॉक स्क्रीन, फ़्लोटिंग बैनर या इन-कॉल नियंत्रण (म्यूट, ऑडियो आउटपुट, कीपैड, होल्ड, कॉल जोड़ें और मर्ज) से कॉल प्रबंधित करें।\n4. कस्टम ग्रीटिंग व सारांश के लिए Lyra AI वॉइसमेल या ऑटो कॉल शेड्यूलर का उपयोग करें।</string>
+
+    <string name="about_guide_section_settings">उपलब्ध सेटिंग्स</string>
+    <string name="about_guide_body_settings">• थीम और रूप: iOS Glass, Liquid Dark और Pure Light स्टाइल व कस्टम डैशबोर्ड मीडिया।\n• अज्ञात कॉल ब्लॉकर: अनजान नंबरों और प्रचार कॉल्स की स्वचालित स्क्रीनिंग।\n• AI इंजन और वॉइसमेल: Firebase AI Logic / Gemini या कस्टम मॉडल और वॉइसमेल ग्रीटिंग कॉन्फ़िगरेशन।\n• कॉल स्क्रीन और अलर्ट: स्क्रीन स्टाइल, एनीमेशन, लॉक-स्क्रीन अलर्ट, रिंगटोन और वाइब्रेशन।\n• डुअल-सिम और बैकअप: डिफ़ॉल्ट सिम पिन करें और Google लॉगिन से प्राथमिकता संपर्क सुरक्षित रखें।</string>
+
+    <string name="about_guide_section_recommended">अनुशंसित / सर्वोत्तम सेटिंग्स</string>
+    <string name="about_guide_body_recommended">• डिफ़ॉल्ट डायलर, कॉल स्क्रीनिंग, सूचनाएँ, अन्य ऐप्स के ऊपर प्रदर्शन और सटीक अलार्म सक्षम रखें।\n• बैटरी ऑप्टिमाइज़ेशन को \"Don\'t optimise\" पर रखें ताकि शेड्यूल्ड कॉल्स और अलर्ट समय पर चलें।\n• लॉक-स्क्रीन कॉल उत्तर के लिए बैकग्राउंड गार्ड और फ़ुल-स्क्रीन इनकमिंग स्क्रीन चालू रखें।\n• बेहतर पहचान के लिए संपर्क फ़ोटो और वाइब्रेशन फ़ीडबैक सक्षम करें।</string>
+
+    <string name="about_guide_section_dos_donts">क्या करें और क्या न करें</string>
+    <string name="about_guide_body_dos_donts">करें:\n• शेड्यूल्ड कॉल्स और मिस्ड कॉल बैज के लिए सटीक अलार्म व सूचना अनुमतियाँ चालू रखें।\n• ऑटो कॉल शेड्यूल करने से पहले सही सिम चुनें।\n\nन करें:\n• सक्रिय कॉल या शेड्यूल्ड कॉल के दौरान बैटरी सेवर से Lyra को प्रतिबंधित या फ़ोर्स-स्टॉप न करें।\n• यदि आप वॉइसमेल उपयोग करते हैं तो माइक्रोफ़ोन अनुमति बंद न करें।</string>
+
+    <string name="about_guide_section_framework">उपयोग फ़्रेमवर्क</string>
+    <string name="about_guide_body_framework">• UI और स्टेट: Jetpack Compose (Material 3) एवं StateFlow ViewModel आर्किटेक्चर।\n• टेलीकॉम कोर: Android InCallService, CallScreeningService, CallEndpoint / CallAudioState रूटिंग और फ़ोरग्राउंड सेवा।\n• डेटा संग्रहण: वॉइसमेल, नोट्स, सारांश और शेड्यूल्ड कॉल्स के लिए Room SQLite; प्राथमिकताओं के लिए DataStore।\n• शेड्यूलिंग और AI: सटीक AlarmManager (setAlarmClock) + Firebase AI Logic।</string>
+
+    <string name="about_guide_section_app_details">ऐप विवरण</string>
+    <string name="about_guide_body_app_details">ऐप नाम: Lyra Calling Assistant\nसंस्करण: %1$s (Build %2$d)\nपैकेज: com.ajay.lyra\nप्लेटफ़ॉर्म: Android (Min SDK 26 / Target SDK 36)\nभाषा समर्थन: सिस्टम भाषा के अनुसार (अंग्रेज़ी और हिंदी)</string>
+
+    <string name="about_updates_header">ऐप अपडेट्स (GitHub Releases)</string>
+    <string name="about_updates_channel">GitHub रिलीज़ चैनल</string>
+    <string name="about_updates_installed">इंस्टॉल किया गया: v%1$s (Build %2$d)</string>
+    <string name="about_updates_repo_label">GitHub रिपॉज़िटरी (owner/repo)</string>
+    <string name="about_updates_save_repo">रिपो सहेजें</string>
+    <string name="about_updates_check">अपडेट जाँचें</string>
+    <string name="about_updates_checking">जाँच हो रही है...</string>
+    <string name="about_ownership_header">स्वामित्व और आर्किटेक्चर</string>
+    <string name="about_privacy_header">गोपनीयता प्रतिज्ञा</string>
+    <string name="about_privacy_zero_cloud">ज़ीरो क्लाउड लीकेज गारंटी</string>
+    <string name="about_privacy_points">1. Lyra डिफ़ॉल्ट रूप से स्थानीय और ऑफ़लाइन काम करता है।\n2. आपके निजी संपर्क बिना अनुमति बाहरी सर्वर पर अपलोड नहीं होते।\n3. वॉइसमेल ग्रीटिंग और ट्रांसक्रिप्ट पूरी तरह इस डिवाइस पर सुरक्षित रहते हैं।\n4. सभी नोट्स, सारांश और प्राथमिकता टैग डिवाइस पर रहते हैं।\n5. Google Play और न्यूनतम-अधिकार मानकों का पालन करता है।</string>
+    <string name="about_frameworks_header">फ़्रेमवर्क और टूलिंग</string>
+    <string name="about_native_stack">नेटिव Android स्टैक</string>
+</resources>

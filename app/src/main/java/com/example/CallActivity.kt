@@ -77,11 +77,17 @@ class CallActivity : ComponentActivity() {
                         hasObservedActiveCall = true
                     }
                     CallStateEnum.DISCONNECTED -> {
-                        viewModel.resetCallState()
-                        finishCallActivity()
+                        if (CallStateManager.hasLiveTelecomCall()) {
+                            CallStateManager.syncWithLiveTelecomBridge()
+                        } else {
+                            viewModel.resetCallState()
+                            finishCallActivity()
+                        }
                     }
                     CallStateEnum.IDLE -> {
-                        if (hasObservedActiveCall) {
+                        if (CallStateManager.hasLiveTelecomCall()) {
+                            CallStateManager.syncWithLiveTelecomBridge()
+                        } else if (hasObservedActiveCall) {
                             finishCallActivity()
                         }
                     }
@@ -160,6 +166,11 @@ class CallActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        CallStateManager.syncWithLiveTelecomBridge()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -179,12 +190,13 @@ class CallActivity : ComponentActivity() {
     }
 
     private fun handleCallActionIntent(launchIntent: Intent?) {
+        CallStateManager.syncWithLiveTelecomBridge()
         when (launchIntent?.action) {
             "ACTION_INCOMING_CALL" -> {
                 CallStateManager.setFullScreenIncomingUiVisible(true)
             }
             "ACTION_OUTGOING_CALL" -> {
-                // Outgoing call displays inside CallActivity above lock screen without dismissing keyguard.
+                // Outgoing or picked-up call displays inside CallActivity above lock screen without dismissing keyguard.
                 CallStateManager.setFullScreenIncomingUiVisible(false)
             }
             "ACTION_ACCEPT_CALL" -> {

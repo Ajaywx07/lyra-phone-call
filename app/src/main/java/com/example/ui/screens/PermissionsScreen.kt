@@ -39,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -391,28 +393,11 @@ fun PermissionsScreen(
 
         item {
             PermissionCard(
-                title = "Microphone (Call Recording & Voicemail)",
-                description = "Records in-call WAV audio and caller voicemails locally on your device.",
+                title = stringResource(R.string.permissions_mic_voicemail_title),
+                description = stringResource(R.string.permissions_mic_voicemail_desc),
                 isGranted = perms.microphoneAllowed,
                 onGrantClick = {
                     singleLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            )
-        }
-
-        item {
-            PermissionCard(
-                title = "Shared Storage (Lyra/Recordings)",
-                description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    "Scoped MediaStore saves call recordings under Lyra/Recordings with zero broad storage permissions required."
-                } else {
-                    "Required on Android 8–9 to save call recordings into shared storage under Lyra/Recordings."
-                },
-                isGranted = perms.callRecordingStorageAllowed,
-                onGrantClick = {
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                        singleLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    }
                 }
             )
         }

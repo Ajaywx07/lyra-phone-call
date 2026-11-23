@@ -38,46 +38,49 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.annotation.StringRes
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.navigation.LyraDestinations
 import com.example.ui.theme.CrimsonDecline
 import com.example.ui.theme.LyraTheme
 
 sealed class BottomNavItem(
     val route: String,
-    val title: String,
+    @StringRes val titleRes: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
     val testTag: String
 ) {
     object Keypad : BottomNavItem(
         route = LyraDestinations.DIALER,
-        title = "Dialpad",
+        titleRes = R.string.nav_dialpad,
         selectedIcon = Icons.Default.Dialpad,
         unselectedIcon = Icons.Outlined.Dialpad,
         testTag = "nav_keypad"
     )
     object Recents : BottomNavItem(
         route = LyraDestinations.CALL_HISTORY,
-        title = "Recent",
+        titleRes = R.string.nav_recent,
         selectedIcon = Icons.Default.History,
         unselectedIcon = Icons.Outlined.History,
         testTag = "nav_recents"
     )
     object Contacts : BottomNavItem(
         route = LyraDestinations.CONTACTS,
-        title = "Contacts",
+        titleRes = R.string.nav_contacts,
         selectedIcon = Icons.Default.People,
         unselectedIcon = Icons.Outlined.People,
         testTag = "nav_contacts"
     )
     object LyraAI : BottomNavItem(
         route = LyraDestinations.HOME,
-        title = "Lyra AI",
+        titleRes = R.string.nav_lyra_ai,
         selectedIcon = Icons.Default.Security,
         unselectedIcon = Icons.Outlined.Security,
         testTag = "nav_lyra_ai"
@@ -93,7 +96,8 @@ fun LyraBottomNavBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
-    unreadMissedCount: Int = 0
+    unreadMissedCount: Int = 0,
+    onReselectTab: ((String) -> Unit)? = null
 ) {
     val colors = LyraTheme.colors
     val items = listOf(
@@ -164,10 +168,14 @@ fun LyraBottomNavBar(
                         label = "nav_capsule_tint"
                     )
 
+                    val label = stringResource(item.titleRes)
+
                     Surface(
                         onClick = {
                             if (!isSelected) {
                                 onNavigate(item.route)
+                            } else {
+                                onReselectTab?.invoke(item.route)
                             }
                         },
                         shape = CircleShape,
@@ -191,7 +199,7 @@ fun LyraBottomNavBar(
                             ) {
                                 Icon(
                                     imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                                    contentDescription = item.title,
+                                    contentDescription = label,
                                     tint = contentTint,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -219,7 +227,7 @@ fun LyraBottomNavBar(
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = item.title,
+                                text = label,
                                 color = if (isSelected) colors.primaryGlow else colors.textMuted,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,

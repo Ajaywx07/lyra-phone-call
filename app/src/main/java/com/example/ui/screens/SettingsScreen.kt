@@ -73,10 +73,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.domain.model.AiProvider
 import com.example.ui.components.CapsuleGroupDivider
 import com.example.ui.components.CapsuleToggle
@@ -258,8 +260,8 @@ fun SettingsScreen(
         ) {
             item {
                 LyraTopBar(
-                    title = "SETTINGS",
-                    subtitle = "Modular Control Center",
+                    title = stringResource(R.string.settings_title),
+                    subtitle = stringResource(R.string.settings_subtitle),
                     showBack = true,
                     onBackClick = onBackClick,
                     trailingActions = {
@@ -280,7 +282,11 @@ fun SettingsScreen(
                             modifier = Modifier.testTag("settings_toggle_all_btn")
                         ) {
                             Text(
-                                text = if (allExpanded) "Collapse All" else "Expand All",
+                                text = if (allExpanded) {
+                                    stringResource(R.string.settings_collapse_all)
+                                } else {
+                                    stringResource(R.string.settings_expand_all)
+                                },
                                 color = colors.primary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -335,7 +341,7 @@ fun SettingsScreen(
                     statusBadgeColor = if (activeFilters > 0) colors.declineColor else colors.textMuted
                 ) {
                     CapsuleToggle(
-                        title = "Unknown Call Blocker",
+                        title = stringResource(R.string.settings_unknown_blocker_title),
                         subtitle = "Automatically block incoming calls from numbers not saved in contacts",
                         icon = Icons.Default.Block,
                         checked = blockUnknownCalls,
@@ -791,11 +797,11 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Lyra Calling Assistant v2.0", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text("Owner: Ajay • Telecom & AI Engine", color = colors.primaryGlow, fontSize = 11.sp)
+                            Text(stringResource(R.string.settings_footer_version), color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.settings_footer_owner), color = colors.primaryGlow, fontSize = 11.sp)
                         }
                         TextButton(onClick = onNavigateToAbout) {
-                            Text("Details", color = colors.primary, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.action_details), color = colors.primary, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

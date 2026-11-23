@@ -1,13 +1,21 @@
 package com.example.service
 
 import android.content.Intent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.OutcomeReceiver
 import android.telecom.Call
 import android.telecom.CallAudioState
+import android.telecom.CallEndpoint
+import android.telecom.CallEndpointException
 import android.telecom.DisconnectCause
 import android.telecom.InCallService
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.example.LyraApplication
 import com.example.data.local.database.LyraDatabase
@@ -26,17 +34,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Android Telecom InCallService implementation.
  * Handles incoming and outgoing cellular calls across foreground, background, lock-screen,
- * and killed-process states, launching the dedicated CallActivity and keeping persistent notifications alive.
+ * and killed-process states, keeping live call state, CallActivity, and API 34+ / legacy audio routing synchronized.
  */
 class LyraInCallService : InCallService(), TelecomCallBridge {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val trackedCalls = CopyOnWriteArrayList<Call>()
+
+    @Volatile
     private var activeTelecomCall: Call? = null
-    private val trackedCalls = mutableListOf<Call>()
+
+    @Volatile
+    private var currentCallEndpoint: CallEndpoint? = null
+
+    @Volatile
+    private var availableCallEndpoints: List<CallEndpoint> = emptyList()
+
+    @Volatile
+    private var lastTelecomMutedState: Boolean = false
 
     private fun readCallState(call: Call): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -45,6 +66,23 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             @Suppress("DEPRECATION")
             call.state
         }
+    }
+
+    private fun liveCallsSnapshot(): List<Call> {
+        return trackedCalls.filter { readCallState(it) != Call.STATE_DISCONNECTED }
+    }
+
+    private fun resolvePrimaryCall(): Call? {
+        val live = liveCallsSnapshot()
+        if (live.isEmpty()) return null
+        return live.lastOrNull { readCallState(it) == Call.STATE_ACTIVE }
+            ?: live.lastOrNull {
+                val st = readCallState(it)
+                st == Call.STATE_DIALING || st == Call.STATE_CONNECTING || st == Call.STATE_PULLING_CALL
+            }
+            ?: live.lastOrNull { readCallState(it) == Call.STATE_RINGING }
+            ?: live.lastOrNull { readCallState(it) == Call.STATE_HOLDING }
+            ?: live.lastOrNull()
     }
 
     private fun startCallForegroundService() {
@@ -90,21 +128,47 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         return contactName ?: details.callerDisplayName?.takeIf { it.isNotBlank() }
     }
 
-    private fun handleOutgoingTransition(call: Call, isAlreadyActive: Boolean) {
+    private fun buildPreliminaryCaller(call: Call, isIncoming: Boolean): CallerInfo {
         val handle = call.details?.handle?.schemeSpecificPart ?: ""
-        val accountLabel = resolveAccountLabel(call)
         val formattedHandle = PhoneNumberUtils.formatDisplay(handle)
         val telecomName = extractTelecomDisplayName(call)
-        val preliminaryCaller = CallerInfo(
+        val fallbackTitle = if (isIncoming) "Incoming Call" else "Outgoing Call"
+        return CallerInfo(
             phoneNumber = handle,
             formattedNumber = formattedHandle,
-            displayName = telecomName ?: formattedHandle.ifBlank { "Outgoing Call" },
+            displayName = telecomName ?: formattedHandle.ifBlank { fallbackTitle },
             photoUri = null,
             isKnown = telecomName != null,
-            contactLabel = if (telecomName != null) "Saved Contact" else "Outgoing Call"
+            contactLabel = if (telecomName != null) "Saved Contact" else fallbackTitle
         )
+    }
 
-        if (CallStateManager.callState.value == CallStateEnum.IDLE ||
+    private fun resolveCallerAsync(call: Call, expectedStates: Set<CallStateEnum>) {
+        val handle = call.details?.handle?.schemeSpecificPart ?: ""
+        val accountLabel = resolveAccountLabel(call)
+        serviceScope.launch {
+            val db = LyraDatabase.getDatabase(applicationContext)
+            val prefs = LyraPreferences(applicationContext)
+            val repo = ContactsRepository(applicationContext, db.priorityContactDao(), prefs)
+            val resolvedCaller = repo.resolveCaller(handle)
+            if (CallStateManager.callState.value in expectedStates) {
+                CallStateManager.updateCurrentCaller(resolvedCaller, simLabel = accountLabel)
+            }
+        }
+    }
+
+    private fun handleOutgoingOrConnectedTransition(
+        call: Call,
+        isAlreadyActive: Boolean,
+        launchUiIfPermitted: Boolean = true
+    ) {
+        activeTelecomCall = call
+        val accountLabel = resolveAccountLabel(call)
+        val preliminaryCaller = buildPreliminaryCaller(call, isIncoming = false)
+        val currentUiState = CallStateManager.callState.value
+
+        if (currentUiState == CallStateEnum.IDLE ||
+            currentUiState == CallStateEnum.DISCONNECTED ||
             CallStateManager.currentCaller.value == null
         ) {
             CallStateManager.onOutgoingCall(preliminaryCaller, simLabel = accountLabel)
@@ -112,22 +176,16 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         if (isAlreadyActive) {
             CallStateManager.onCallAnswered()
         }
+        syncCurrentAudioStateToManager()
         startCallForegroundService()
-        if (canBringCallUiToFront()) {
+        if (launchUiIfPermitted && (canBringCallUiToFront() || isAlreadyActive)) {
             launchCallUi("ACTION_OUTGOING_CALL")
         }
 
-        serviceScope.launch {
-            val db = LyraDatabase.getDatabase(applicationContext)
-            val prefs = LyraPreferences(applicationContext)
-            val repo = ContactsRepository(applicationContext, db.priorityContactDao(), prefs)
-            val resolvedCaller = repo.resolveCaller(handle)
-            if (CallStateManager.callState.value == CallStateEnum.DIALING ||
-                CallStateManager.callState.value == CallStateEnum.ACTIVE
-            ) {
-                CallStateManager.updateCurrentCaller(resolvedCaller, simLabel = accountLabel)
-            }
-        }
+        resolveCallerAsync(
+            call = call,
+            expectedStates = setOf(CallStateEnum.DIALING, CallStateEnum.ACTIVE, CallStateEnum.VOICEMAIL)
+        )
     }
 
     private fun recordMissedCallIfUnanswered(
@@ -147,7 +205,7 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         if (phoneNumber.isBlank() && prevCaller == null) return
 
         val callerName = prevCaller?.displayName?.takeIf { it.isNotBlank() }
-            ?: extractTelecomDisplayName(disconnectedCall ?: return)
+            ?: disconnectedCall?.let { extractTelecomDisplayName(it) }
         val simLabelToRecord = prevSimLabel.takeIf { it.isNotBlank() }
             ?: disconnectedCall?.let { resolveAccountLabel(it) }
         val missedAt = System.currentTimeMillis()
@@ -206,10 +264,12 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             applicationContext.stopService(Intent(applicationContext, LyraCallService::class.java))
         }
         activeTelecomCall = null
+        currentCallEndpoint = null
+        availableCallEndpoints = emptyList()
     }
 
     private fun refreshMultiCallState() {
-        val snapshot = trackedCalls.toList()
+        val snapshot = liveCallsSnapshot()
         val activeCalls = snapshot.filter { readCallState(it) == Call.STATE_ACTIVE }
         val holdingCalls = snapshot.filter { readCallState(it) == Call.STATE_HOLDING }
         val hasConferenceChildren = snapshot.any { runCatching { it.children.isNotEmpty() }.getOrDefault(false) }
@@ -217,15 +277,11 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         val totalParticipants = maxOf(
             snapshot.size,
             snapshot.maxOfOrNull { runCatching { it.children.size }.getOrDefault(0) } ?: 1
-        )
+        ).coerceAtLeast(1)
         val canMerge = !hasConferenceChildren &&
             ((activeCalls.isNotEmpty() && holdingCalls.isNotEmpty()) || hasConferenceable)
 
-        if (activeCalls.isNotEmpty()) {
-            activeTelecomCall = activeCalls.last()
-        } else if (holdingCalls.isNotEmpty() && activeTelecomCall == null) {
-            activeTelecomCall = holdingCalls.last()
-        }
+        activeTelecomCall = resolvePrimaryCall()
 
         CallStateManager.updateConferenceInfo(
             participantCount = totalParticipants,
@@ -240,12 +296,19 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             runCatching { call.unregisterCallback(callCallback) }
             trackedCalls.remove(call)
         }
-        val remainingCalls = trackedCalls.toList().filter { readCallState(it) != Call.STATE_DISCONNECTED }
+        val remainingCalls = liveCallsSnapshot()
         if (remainingCalls.isEmpty()) {
             handleCallDisconnectedOrRemoved(call)
         } else {
-            activeTelecomCall = remainingCalls.lastOrNull()
+            val primary = resolvePrimaryCall()
+            activeTelecomCall = primary
             refreshMultiCallState()
+            if (primary != null) {
+                when (readCallState(primary)) {
+                    Call.STATE_ACTIVE -> CallStateManager.onCallAnswered()
+                    Call.STATE_HOLDING -> CallStateManager.setHoldState(true)
+                }
+            }
             CallStateManager.setCallStatusBanner("Returned to remaining call")
         }
     }
@@ -253,12 +316,14 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
     private val callCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call?, state: Int) {
             super.onStateChanged(call, state)
-            val telecomCall = call ?: activeTelecomCall
+            CallStateManager.registerTelecomBridge(this@LyraInCallService)
+            val telecomCall = call ?: resolvePrimaryCall() ?: activeTelecomCall
             when (state) {
                 Call.STATE_SELECT_PHONE_ACCOUNT -> Unit
                 Call.STATE_DIALING, Call.STATE_CONNECTING -> {
-                    if (trackedCalls.size <= 1 && telecomCall != null) {
-                        handleOutgoingTransition(telecomCall, isAlreadyActive = false)
+                    activeTelecomCall = resolvePrimaryCall() ?: telecomCall
+                    if (liveCallsSnapshot().size <= 1 && telecomCall != null) {
+                        handleOutgoingOrConnectedTransition(telecomCall, isAlreadyActive = false)
                     } else {
                         refreshMultiCallState()
                         startCallForegroundService()
@@ -271,15 +336,29 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
                     refreshMultiCallState()
                 }
                 Call.STATE_ACTIVE -> {
-                    if (CallStateManager.callState.value == CallStateEnum.IDLE && telecomCall != null) {
-                        handleOutgoingTransition(telecomCall, isAlreadyActive = true)
+                    activeTelecomCall = call ?: resolvePrimaryCall() ?: telecomCall
+                    val uiState = CallStateManager.callState.value
+                    if ((uiState == CallStateEnum.IDLE || uiState == CallStateEnum.DISCONNECTED) &&
+                        telecomCall != null
+                    ) {
+                        handleOutgoingOrConnectedTransition(telecomCall, isAlreadyActive = true)
                     } else {
                         CallStateManager.onCallAnswered()
-                        refreshMultiCallState()
-                        startCallForegroundService()
-                        if (canBringCallUiToFront()) {
-                            launchCallUi("ACTION_OUTGOING_CALL")
+                        if (CallStateManager.currentCaller.value == null && telecomCall != null) {
+                            CallStateManager.updateCurrentCaller(
+                                buildPreliminaryCaller(telecomCall, isIncoming = false),
+                                simLabel = resolveAccountLabel(telecomCall)
+                            )
+                            resolveCallerAsync(
+                                telecomCall,
+                                setOf(CallStateEnum.ACTIVE, CallStateEnum.VOICEMAIL)
+                            )
                         }
+                        refreshMultiCallState()
+                        syncCurrentAudioStateToManager()
+                        startCallForegroundService()
+                        // Always ensure CallActivity opens/re-fronts on real call pickup
+                        launchCallUi("ACTION_OUTGOING_CALL")
                     }
                 }
                 Call.STATE_DISCONNECTED -> {
@@ -297,22 +376,49 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             super.onConferenceableCallsChanged(call, conferenceableCalls)
             refreshMultiCallState()
         }
+
+        override fun onDetailsChanged(call: Call?, details: Call.Details?) {
+            super.onDetailsChanged(call, details)
+            val target = call ?: return
+            if (target == resolvePrimaryCall()) {
+                val state = readCallState(target)
+                if (state == Call.STATE_RINGING || state == Call.STATE_DIALING || state == Call.STATE_ACTIVE) {
+                    val updatedName = extractTelecomDisplayName(target)
+                    if (!updatedName.isNullOrBlank()) {
+                        val existing = CallStateManager.currentCaller.value
+                        if (existing == null || existing.displayName != updatedName) {
+                            resolveCallerAsync(
+                                target,
+                                setOf(CallStateEnum.RINGING, CallStateEnum.DIALING, CallStateEnum.ACTIVE, CallStateEnum.VOICEMAIL)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
+        CallStateManager.bindApplicationContext(applicationContext)
         CallStateManager.registerTelecomBridge(this)
     }
 
+    override fun onUnbind(intent: Intent?): Boolean {
+        CallStateManager.unregisterTelecomBridgeIfMatches(this)
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
-        CallStateManager.registerTelecomBridge(null)
+        CallStateManager.unregisterTelecomBridgeIfMatches(this)
         serviceScope.cancel()
         super.onDestroy()
     }
 
     override fun onBringToForeground(showDialpad: Boolean) {
         super.onBringToForeground(showDialpad)
-        if (CallStateManager.callState.value == CallStateEnum.IDLE) {
+        syncCallsState()
+        if (CallStateManager.callState.value == CallStateEnum.IDLE && !hasLiveCalls()) {
             return
         }
         val action = if (CallStateManager.callState.value == CallStateEnum.RINGING) {
@@ -324,9 +430,47 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
     }
 
     @Suppress("DEPRECATION")
-    override fun onCallAudioStateChanged(audioState: CallAudioState?) {
-        super.onCallAudioStateChanged(audioState)
-        audioState ?: return
+    private fun endpointTypeToRoute(endpointType: Int): Int {
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> when (endpointType) {
+                CallEndpoint.TYPE_SPEAKER -> CallAudioState.ROUTE_SPEAKER
+                CallEndpoint.TYPE_BLUETOOTH -> CallAudioState.ROUTE_BLUETOOTH
+                CallEndpoint.TYPE_WIRED_HEADSET -> CallAudioState.ROUTE_WIRED_HEADSET
+                else -> CallAudioState.ROUTE_EARPIECE
+            }
+            else -> CallAudioState.ROUTE_EARPIECE
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun syncCurrentAudioStateToManager() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && currentCallEndpoint != null) {
+            val endpoint = currentCallEndpoint ?: return
+            val route = endpointTypeToRoute(endpoint.endpointType)
+            var supportedMask = CallAudioState.ROUTE_EARPIECE or CallAudioState.ROUTE_SPEAKER
+            availableCallEndpoints.forEach { ep ->
+                supportedMask = supportedMask or endpointTypeToRoute(ep.endpointType)
+            }
+            CallStateManager.syncAudioState(
+                muted = lastTelecomMutedState,
+                speakerOn = (route and CallAudioState.ROUTE_SPEAKER) != 0,
+                route = route,
+                supportedRoutes = supportedMask,
+                fromTelecom = true
+            )
+            return
+        }
+
+        @Suppress("DEPRECATION")
+        val legacyAudioState = runCatching { callAudioState }.getOrNull()
+        if (legacyAudioState != null) {
+            syncLegacyAudioState(legacyAudioState)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun syncLegacyAudioState(audioState: CallAudioState) {
+        lastTelecomMutedState = audioState.isMuted
         val hasBtMask = (audioState.supportedRouteMask and CallAudioState.ROUTE_BLUETOOTH) != 0
         val hasBtDevice = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             audioState.supportedBluetoothDevices.isNotEmpty() ||
@@ -349,17 +493,50 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         )
     }
 
+    @Suppress("DEPRECATION")
+    override fun onCallAudioStateChanged(audioState: CallAudioState?) {
+        super.onCallAudioStateChanged(audioState)
+        audioState ?: return
+        syncLegacyAudioState(audioState)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    override fun onCallEndpointChanged(callEndpoint: CallEndpoint) {
+        super.onCallEndpointChanged(callEndpoint)
+        currentCallEndpoint = callEndpoint
+        syncCurrentAudioStateToManager()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    override fun onAvailableCallEndpointsChanged(availableEndpoints: List<CallEndpoint>) {
+        super.onAvailableCallEndpointsChanged(availableEndpoints)
+        availableCallEndpoints = availableEndpoints.toList()
+        syncCurrentAudioStateToManager()
+    }
+
+    override fun onMuteStateChanged(isMuted: Boolean) {
+        super.onMuteStateChanged(isMuted)
+        lastTelecomMutedState = isMuted
+        syncCurrentAudioStateToManager()
+    }
+
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        CallStateManager.bindApplicationContext(applicationContext)
+        CallStateManager.registerTelecomBridge(this)
+
         if (!trackedCalls.contains(call)) {
             trackedCalls.add(call)
         }
-        val isPrimaryCall = activeTelecomCall == null || trackedCalls.size == 1
-        activeTelecomCall = call
-        call.registerCallback(callCallback)
+        call.registerCallback(callCallback, mainHandler)
 
         val currentState = readCallState(call)
+        val liveCount = liveCallsSnapshot().size
+        val isPrimaryCall = activeTelecomCall == null || liveCount <= 1 ||
+            currentState == Call.STATE_ACTIVE || currentState == Call.STATE_DIALING
+        activeTelecomCall = resolvePrimaryCall() ?: call
         refreshMultiCallState()
+        syncCurrentAudioStateToManager()
 
         if (!isPrimaryCall) {
             return
@@ -375,20 +552,12 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         // Fast optimistic incoming call presentation (<10ms): display Telecom metadata immediately
         // without waiting on DataStore/Room/Contacts disk I/O, then enrich asynchronously.
         if (currentState == Call.STATE_RINGING) {
-            val formattedHandle = PhoneNumberUtils.formatDisplay(handle)
-            val telecomName = extractTelecomDisplayName(call)
-            val preliminaryCaller = CallerInfo(
-                phoneNumber = handle,
-                formattedNumber = formattedHandle,
-                displayName = telecomName ?: formattedHandle.ifBlank { "Incoming Call" },
-                photoUri = null,
-                isKnown = telecomName != null,
-                contactLabel = if (telecomName != null) "Saved Contact" else "Incoming Call"
-            )
+            val preliminaryCaller = buildPreliminaryCaller(call, isIncoming = true)
             val cachedSettings = LyraPreferences.getCachedIncomingSnapshotOrNull()
                 ?: IncomingCallSettingsSnapshot()
 
             CallStateManager.onIncomingCall(preliminaryCaller, simLabel = accountLabel)
+            startCallForegroundService()
             NotificationHelper.dispatchIncomingCall(
                 context = applicationContext,
                 caller = preliminaryCaller,
@@ -427,10 +596,10 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
 
         when (currentState) {
             Call.STATE_DIALING, Call.STATE_CONNECTING -> {
-                handleOutgoingTransition(call, isAlreadyActive = false)
+                handleOutgoingOrConnectedTransition(call, isAlreadyActive = false)
             }
             Call.STATE_ACTIVE -> {
-                handleOutgoingTransition(call, isAlreadyActive = true)
+                handleOutgoingOrConnectedTransition(call, isAlreadyActive = true)
             }
         }
     }
@@ -439,18 +608,72 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         super.onCallRemoved(call)
         runCatching { call.unregisterCallback(callCallback) }
         trackedCalls.remove(call)
-        if (trackedCalls.isEmpty()) {
-            if (activeTelecomCall == call || activeTelecomCall == null) {
-                handleCallDisconnectedOrRemoved(call)
-            }
+        val remaining = liveCallsSnapshot()
+        if (remaining.isEmpty()) {
+            handleCallDisconnectedOrRemoved(call)
         } else {
-            activeTelecomCall = trackedCalls.lastOrNull()
+            activeTelecomCall = resolvePrimaryCall()
             refreshMultiCallState()
         }
     }
 
+    override fun hasLiveCalls(): Boolean {
+        return liveCallsSnapshot().isNotEmpty()
+    }
+
+    override fun syncCallsState() {
+        CallStateManager.registerTelecomBridge(this)
+        val primary = resolvePrimaryCall() ?: return
+        activeTelecomCall = primary
+        val telecomState = readCallState(primary)
+        when (telecomState) {
+            Call.STATE_RINGING -> {
+                if (CallStateManager.callState.value != CallStateEnum.RINGING) {
+                    val caller = CallStateManager.currentCaller.value
+                        ?: buildPreliminaryCaller(primary, isIncoming = true)
+                    CallStateManager.onIncomingCall(caller, simLabel = resolveAccountLabel(primary))
+                }
+            }
+            Call.STATE_DIALING, Call.STATE_CONNECTING -> {
+                handleOutgoingOrConnectedTransition(
+                    call = primary,
+                    isAlreadyActive = false,
+                    launchUiIfPermitted = false
+                )
+            }
+            Call.STATE_ACTIVE -> {
+                handleOutgoingOrConnectedTransition(
+                    call = primary,
+                    isAlreadyActive = true,
+                    launchUiIfPermitted = false
+                )
+            }
+            Call.STATE_HOLDING -> {
+                if (CallStateManager.callState.value == CallStateEnum.IDLE ||
+                    CallStateManager.callState.value == CallStateEnum.DISCONNECTED
+                ) {
+                    handleOutgoingOrConnectedTransition(
+                        call = primary,
+                        isAlreadyActive = true,
+                        launchUiIfPermitted = false
+                    )
+                }
+                CallStateManager.setHoldState(true)
+            }
+        }
+        refreshMultiCallState()
+        syncCurrentAudioStateToManager()
+    }
+
     override fun answerCall() {
-        runCatching { activeTelecomCall?.answer(VideoProfile.STATE_AUDIO_ONLY) }
+        val ringingCall = liveCallsSnapshot().lastOrNull { readCallState(it) == Call.STATE_RINGING }
+            ?: resolvePrimaryCall()
+            ?: activeTelecomCall
+            ?: return
+        activeTelecomCall = ringingCall
+        val videoState = runCatching { ringingCall.details?.videoState }.getOrNull()
+            ?: VideoProfile.STATE_AUDIO_ONLY
+        runCatching { ringingCall.answer(videoState) }
     }
 
     override fun rejectOrDisconnectCall(): Boolean {
@@ -462,7 +685,7 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             val ok = runCatching {
                 if (state == Call.STATE_RINGING) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        // SIP 603 Decline: tells carrier this is an explicit user decline (prevents 486 Busy -> forwarding tune delay)
+                        // SIP 603 Decline: tells carrier this is an explicit user decline
                         call.reject(Call.REJECT_REASON_DECLINED)
                     } else {
                         @Suppress("DEPRECATION")
@@ -479,13 +702,17 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
     }
 
     override fun toggleHold(hold: Boolean) {
+        val target = resolvePrimaryCall() ?: activeTelecomCall ?: return
         runCatching {
-            if (hold) activeTelecomCall?.hold() else activeTelecomCall?.unhold()
+            if (hold) target.hold() else target.unhold()
         }
     }
 
     override fun applyMute(muted: Boolean) {
+        lastTelecomMutedState = muted
         runCatching { setMuted(muted) }
+        val am = getSystemService(AUDIO_SERVICE) as? AudioManager
+        runCatching { am?.isMicrophoneMute = muted }
     }
 
     override fun setSpeaker(speaker: Boolean) {
@@ -495,19 +722,85 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         } else {
             CallAudioState.ROUTE_WIRED_OR_EARPIECE
         }
-        @Suppress("DEPRECATION")
-        runCatching { setAudioRoute(route) }
+        setAudioRouteMode(route)
     }
 
+    @Suppress("DEPRECATION")
     override fun setAudioRouteMode(route: Int) {
-        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val desiredType = when {
+                (route and CallAudioState.ROUTE_SPEAKER) != 0 -> CallEndpoint.TYPE_SPEAKER
+                (route and CallAudioState.ROUTE_BLUETOOTH) != 0 -> CallEndpoint.TYPE_BLUETOOTH
+                (route and CallAudioState.ROUTE_WIRED_HEADSET) != 0 -> CallEndpoint.TYPE_WIRED_HEADSET
+                else -> CallEndpoint.TYPE_EARPIECE
+            }
+            val matchingEndpoint = availableCallEndpoints.firstOrNull { it.endpointType == desiredType }
+                ?: if (desiredType == CallEndpoint.TYPE_EARPIECE) {
+                    availableCallEndpoints.firstOrNull {
+                        it.endpointType == CallEndpoint.TYPE_WIRED_HEADSET ||
+                            it.endpointType == CallEndpoint.TYPE_EARPIECE
+                    }
+                } else {
+                    null
+                }
+            if (matchingEndpoint != null) {
+                requestCallEndpointChange(
+                    matchingEndpoint,
+                    ContextCompat.getMainExecutor(applicationContext),
+                    object : OutcomeReceiver<Void, CallEndpointException> {
+                        override fun onResult(result: Void?) {
+                            currentCallEndpoint = matchingEndpoint
+                            syncCurrentAudioStateToManager()
+                        }
+
+                        override fun onError(error: CallEndpointException) {
+                            applyLegacyAndAudioManagerRoute(route)
+                        }
+                    }
+                )
+                return
+            }
+        }
+        applyLegacyAndAudioManagerRoute(route)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun applyLegacyAndAudioManagerRoute(route: Int) {
         runCatching { setAudioRoute(route) }
+        val am = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        val wantSpeaker = (route and CallAudioState.ROUTE_SPEAKER) != 0
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val targetTypes = when {
+                    wantSpeaker -> listOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+                    (route and CallAudioState.ROUTE_BLUETOOTH) != 0 -> listOf(
+                        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                        AudioDeviceInfo.TYPE_BLE_HEADSET
+                    )
+                    (route and CallAudioState.ROUTE_WIRED_HEADSET) != 0 -> listOf(
+                        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                        AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+                    )
+                    else -> listOf(
+                        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                    )
+                }
+                val device = am.availableCommunicationDevices.firstOrNull { it.type in targetTypes }
+                if (device != null) {
+                    am.setCommunicationDevice(device)
+                } else {
+                    am.clearCommunicationDevice()
+                }
+            }
+            am.isSpeakerphoneOn = wantSpeaker
+        }
     }
 
     override fun mergeConference() {
-        val primary = activeTelecomCall ?: return
+        val primary = resolvePrimaryCall() ?: activeTelecomCall ?: return
         val conferenceTarget = runCatching { primary.conferenceableCalls.firstOrNull() }.getOrNull()
-            ?: trackedCalls.toList().firstOrNull { it != primary }
+            ?: liveCallsSnapshot().firstOrNull { it != primary }
         if (conferenceTarget != null) {
             runCatching { primary.conference(conferenceTarget) }
         }
@@ -524,9 +817,10 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
     }
 
     override fun sendDtmf(digit: Char) {
+        val target = resolvePrimaryCall() ?: activeTelecomCall ?: return
         runCatching {
-            activeTelecomCall?.playDtmfTone(digit)
-            activeTelecomCall?.stopDtmfTone()
+            target.playDtmfTone(digit)
+            target.stopDtmfTone()
         }
     }
 }

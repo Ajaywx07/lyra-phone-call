@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhoneCallback
 import androidx.compose.material3.AlertDialog
@@ -42,13 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.domain.model.CallHistoryItemData
 import com.example.domain.model.CallTypeEnum
 import com.example.domain.model.ContactItemData
@@ -158,8 +156,7 @@ fun CallHistoryScreen(
     viewModel: LyraMainViewModel,
     onBackClick: () -> Unit,
     onNavigateTab: ((String) -> Unit)? = null,
-    onOpenContactDetails: () -> Unit = {},
-    onOpenRecordings: () -> Unit = {}
+    onOpenContactDetails: () -> Unit = {}
 ) {
     val colors = LyraTheme.colors
     val callList by viewModel.filteredCallLog.collectAsStateWithLifecycle()
@@ -280,39 +277,11 @@ fun CallHistoryScreen(
         ) {
             item {
                 LyraTopBar(
-                    title = "RECENTS",
-                    subtitle = "Tap for profile • Long-press for options",
+                    title = stringResource(R.string.recents_title),
+                    subtitle = stringResource(R.string.recents_subtitle),
                     showBack = onNavigateTab == null,
                     onBackClick = onBackClick,
-                    statusText = "${displayedCalls.size} Calls",
-                    trailingActions = {
-                        Surface(
-                            onClick = onOpenRecordings,
-                            shape = CircleShape,
-                            color = colors.surfaceElevated,
-                            border = BorderStroke(1.dp, colors.declineColor.copy(alpha = 0.5f)),
-                            modifier = Modifier.testTag("history_open_recordings_btn")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FiberManualRecord,
-                                    contentDescription = "Open Call Recordings",
-                                    tint = colors.declineColor,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(
-                                    text = "Recordings",
-                                    color = colors.textPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
+                    statusText = "${displayedCalls.size} Calls"
                 )
             }
 

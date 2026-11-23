@@ -1,10 +1,7 @@
 package com.example.ui.components
 
-import android.Manifest
 import android.telecom.CallAudioState
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -45,13 +42,11 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Dialpad
-import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,6 +82,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -97,14 +93,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.domain.model.ContactItemData
 import com.example.ui.screens.DIAL_KEYS
 import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.EmeraldAccept
 import com.example.ui.theme.LyraTheme
-import com.example.utils.CallRecordingStorage
-import com.example.utils.CallRecordingSupportMode
-import com.example.utils.PermissionHelper
 import com.example.utils.PhoneNumberUtils
 import kotlinx.coroutines.awaitCancellation
 
@@ -117,36 +111,19 @@ private enum class AddCallTab(val label: String) {
 @Composable
 fun InCallMoreOptionsSheet(
     isHold: Boolean,
-    isRecording: Boolean,
-    recordingSeconds: Long,
     conferenceParticipantCount: Int,
     canMergeConference: Boolean,
     isConferenceMerged: Boolean,
     currentAudioRoute: Int,
     isBluetoothAvailable: Boolean,
     onToggleHold: () -> Unit,
-    onToggleRecording: () -> Unit,
     onAddCallClick: () -> Unit,
     onMergeConference: () -> Unit,
     onSelectAudioRoute: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
     val colors = LyraTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        if (PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
-            onToggleRecording()
-        }
-    }
-    val recordingSupport = remember(isRecording) {
-        CallRecordingStorage.detectRecordingCapability(context)
-    }
-
-    val recFormatted = String.format("%02d:%02d", recordingSeconds / 60, recordingSeconds % 60)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -164,13 +141,13 @@ fun InCallMoreOptionsSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "More Call Options",
+                text = stringResource(R.string.call_more_options_title),
                 color = colors.textPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Conference, hold, recording & audio routing controls",
+                text = stringResource(R.string.call_more_options_subtitle),
                 color = colors.textSecondary,
                 fontSize = 12.sp
             )
@@ -224,34 +201,10 @@ fun InCallMoreOptionsSheet(
                 testTagName = "more_option_hold"
             )
 
-            // 3. Call Recording
-            MoreSheetActionRow(
-                icon = if (isRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
-                title = if (isRecording) "Stop Call Recording ($recFormatted)" else "Call Recording",
-                subtitle = when {
-                    isRecording -> "Tap to save WAV to Lyra/Recordings"
-                    recordingSupport.mode == CallRecordingSupportMode.MIC_ONLY_RESTRICTED ->
-                        "Saves to Lyra/Recordings (Mic-only: Android restricts 2-way capture)"
-                    recordingSupport.mode == CallRecordingSupportMode.PERMISSION_REQUIRED ->
-                        "Grant Microphone permission to save WAV in Lyra/Recordings"
-                    else -> "Record two-way call audio to Lyra/Recordings"
-                },
-                accentColor = colors.declineColor,
-                isActive = isRecording,
-                onClick = {
-                    if (isRecording || PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
-                        onToggleRecording()
-                    } else {
-                        recordAudioPermissionLauncher.launch(PermissionHelper.getCallRecordingRuntimePermissions())
-                    }
-                },
-                testTagName = "more_option_record"
-            )
-
-            // 4. Add Another Caller shortcut
+            // 3. Add Another Caller shortcut
             MoreSheetActionRow(
                 icon = Icons.Default.PersonAdd,
-                title = "Add Call",
+                title = stringResource(R.string.call_action_add_call),
                 subtitle = "Hold current line and dial or pick another contact",
                 accentColor = colors.secondaryGlow,
                 isActive = false,
@@ -262,7 +215,7 @@ fun InCallMoreOptionsSheet(
                 testTagName = "more_option_add_call"
             )
 
-            // 5. Audio Route Selector (Earpiece / Speaker / Bluetooth only if actively connected)
+            // 4. Audio Route Selector (Earpiece / Speaker / Bluetooth only if actively connected)
             @Suppress("DEPRECATION")
             Column(
                 modifier = Modifier
@@ -271,7 +224,7 @@ fun InCallMoreOptionsSheet(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "AUDIO OUTPUT",
+                    text = stringResource(R.string.call_audio_output_header),
                     color = colors.primaryGlow,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -281,14 +234,18 @@ fun InCallMoreOptionsSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val earpieceLabel = stringResource(R.string.call_audio_earpiece)
+                    val speakerLabel = stringResource(R.string.call_audio_speaker)
+                    val bluetoothLabel = stringResource(R.string.call_audio_bluetooth)
                     val routes = buildList {
-                        add(Triple(CallAudioState.ROUTE_EARPIECE, "Earpiece", Icons.Default.Hearing))
-                        add(Triple(CallAudioState.ROUTE_SPEAKER, "Speaker", Icons.Default.VolumeUp))
+                        add(Triple(CallAudioState.ROUTE_EARPIECE, earpieceLabel to "earpiece", Icons.Default.Hearing))
+                        add(Triple(CallAudioState.ROUTE_SPEAKER, speakerLabel to "speaker", Icons.Default.VolumeUp))
                         if (isBluetoothAvailable) {
-                            add(Triple(CallAudioState.ROUTE_BLUETOOTH, "Bluetooth", Icons.Default.BluetoothAudio))
+                            add(Triple(CallAudioState.ROUTE_BLUETOOTH, bluetoothLabel to "bluetooth", Icons.Default.BluetoothAudio))
                         }
                     }
-                    routes.forEach { (routeFlag, label, icon) ->
+                    routes.forEach { (routeFlag, labelAndTag, icon) ->
+                        val (label, routeTag) = labelAndTag
                         val selected = (currentAudioRoute and routeFlag) != 0
                         FilterChip(
                             selected = selected,
@@ -325,7 +282,7 @@ fun InCallMoreOptionsSheet(
                             ),
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("more_audio_${label.lowercase()}")
+                                .testTag("more_audio_$routeTag")
                         )
                     }
                 }
@@ -347,11 +304,14 @@ fun AudioRoutePickerDialog(
     onDismiss: () -> Unit
 ) {
     val colors = LyraTheme.colors
+    val earpieceLabel = stringResource(R.string.call_audio_earpiece)
+    val speakerLabel = stringResource(R.string.call_audio_speaker)
+    val bluetoothLabel = stringResource(R.string.call_audio_bluetooth)
     val routeOptions = buildList {
         add(
             AudioRouteMenuOption(
                 routeFlag = CallAudioState.ROUTE_EARPIECE,
-                label = "Earpiece",
+                label = earpieceLabel,
                 subtitle = "Phone ear speaker",
                 icon = Icons.Default.Hearing,
                 testTag = "audio_route_earpiece"
@@ -360,7 +320,7 @@ fun AudioRoutePickerDialog(
         add(
             AudioRouteMenuOption(
                 routeFlag = CallAudioState.ROUTE_SPEAKER,
-                label = "Speaker",
+                label = speakerLabel,
                 subtitle = "Phone loudspeaker",
                 icon = Icons.Default.VolumeUp,
                 testTag = "audio_route_speaker"
@@ -370,7 +330,7 @@ fun AudioRoutePickerDialog(
             add(
                 AudioRouteMenuOption(
                     routeFlag = CallAudioState.ROUTE_BLUETOOTH,
-                    label = "Bluetooth",
+                    label = bluetoothLabel,
                     subtitle = "Connected Bluetooth audio device",
                     icon = Icons.Default.BluetoothAudio,
                     testTag = "audio_route_bluetooth"
@@ -385,16 +345,16 @@ fun AudioRoutePickerDialog(
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = "Audio Output",
+                    text = stringResource(R.string.call_audio_route_picker_title),
                     color = colors.textPrimary,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 18.sp
                 )
                 Text(
                     text = if (isBluetoothAvailable) {
-                        "Choose Earpiece, Speaker, or Bluetooth"
+                        "Choose $earpieceLabel, $speakerLabel, or $bluetoothLabel"
                     } else {
-                        "Choose Earpiece or Speaker"
+                        "Choose $earpieceLabel or $speakerLabel"
                     },
                     color = colors.textSecondary,
                     fontSize = 12.sp
@@ -480,7 +440,7 @@ fun AudioRoutePickerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close", color = colors.primary, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.action_close), color = colors.primary, fontWeight = FontWeight.Bold)
             }
         },
         containerColor = colors.surfaceElevated,
@@ -1237,7 +1197,7 @@ fun InCallDtmfKeypadDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "DTMF Keypad",
+                    text = stringResource(R.string.call_dtmf_keypad_title),
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
@@ -1290,7 +1250,7 @@ fun InCallDtmfKeypadDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = "Close", color = colors.primary)
+                Text(text = stringResource(R.string.action_close), color = colors.primary)
             }
         },
         dismissButton = {

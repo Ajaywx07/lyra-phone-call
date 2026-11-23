@@ -7,7 +7,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.data.local.entity.CallNote
-import com.example.data.local.entity.CallRecording
 import com.example.data.local.entity.CallSummary
 import com.example.data.local.entity.PriorityContact
 import com.example.data.local.entity.ScheduledCall
@@ -112,23 +111,3 @@ interface ScheduledCallDao {
     @Query("DELETE FROM scheduled_calls WHERE id = :id")
     suspend fun deleteScheduledCallById(id: Long)
 }
-
-@Dao
-interface CallRecordingDao {
-    @Query("SELECT * FROM call_recordings ORDER BY timestamp DESC")
-    fun getAllRecordings(): Flow<List<CallRecording>>
-
-    @Query("SELECT * FROM call_recordings WHERE id = :id LIMIT 1")
-    suspend fun getRecordingById(id: Long): CallRecording?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertRecording(recording: CallRecording): Long
-
-    @Delete
-    suspend fun deleteRecording(recording: CallRecording)
-
-    @Query("DELETE FROM call_recordings WHERE id = :id")
-    suspend fun deleteRecordingById(id: Long)
-}
-
-

@@ -15,5 +15,4 @@ object LyraDestinations {
     const val PERMISSIONS = "permissions"
     const val ABOUT = "about"
     const val SCHEDULED_CALLS = "scheduled_calls"
-    const val CALL_RECORDINGS = "call_recordings"
 }

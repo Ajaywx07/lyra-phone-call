@@ -63,12 +63,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.domain.model.CallScreenStyle
 import com.example.domain.model.CallerInfo
 import com.example.ui.components.CallActionButton
@@ -266,21 +268,23 @@ fun IncomingCallScreen(
                         ) {
                             CallActionButton(
                                 icon = Icons.AutoMirrored.Filled.VolumeOff,
-                                label = if (isSilenced) "Silenced" else "Silence",
+                                label = if (isSilenced) stringResource(R.string.incoming_silenced) else stringResource(R.string.incoming_silence),
                                 onClick = { viewModel.silenceRinger() },
                                 containerColor = if (isSilenced) Color.White.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.12f),
                                 contentColor = Color.White,
                                 size = 50.dp,
-                                iconSize = 22.dp
+                                iconSize = 22.dp,
+                                testTagOverride = if (isSilenced) "call_action_Silenced" else "call_action_Silence"
                             )
                             CallActionButton(
                                 icon = Icons.AutoMirrored.Filled.Message,
-                                label = "Message",
+                                label = stringResource(R.string.incoming_message),
                                 onClick = { showQuickMessageDialog = true },
                                 containerColor = Color.White.copy(alpha = 0.12f),
                                 contentColor = Color.White,
                                 size = 50.dp,
-                                iconSize = 22.dp
+                                iconSize = 22.dp,
+                                testTagOverride = "call_action_Message"
                             )
                         }
 
@@ -301,7 +305,7 @@ fun IncomingCallScreen(
                         ) {
                             CallActionButton(
                                 icon = Icons.Default.CallEnd,
-                                label = "End Call",
+                                label = stringResource(R.string.call_action_end_call),
                                 onClick = {
                                     viewModel.declineCall()
                                     onDeclineCall()
@@ -310,11 +314,12 @@ fun IncomingCallScreen(
                                 contentColor = Color.White,
                                 size = 64.dp,
                                 iconSize = 28.dp,
-                                modifier = Modifier.weight(1f).testTag("decline_call_btn")
+                                modifier = Modifier.weight(1f),
+                                testTagOverride = "decline_call_btn"
                             )
                             CallActionButton(
                                 icon = Icons.Default.Voicemail,
-                                label = "Voicemail",
+                                label = stringResource(R.string.incoming_voicemail),
                                 onClick = {
                                     viewModel.startVoicemailScreening()
                                     onVoicemailCall()
@@ -323,11 +328,12 @@ fun IncomingCallScreen(
                                 contentColor = Color.White,
                                 size = 64.dp,
                                 iconSize = 28.dp,
-                                modifier = Modifier.weight(1f).testTag("voicemail_call_btn")
+                                modifier = Modifier.weight(1f),
+                                testTagOverride = "voicemail_call_btn"
                             )
                             CallActionButton(
                                 icon = Icons.Default.Call,
-                                label = "Pick Up",
+                                label = stringResource(R.string.incoming_pick_up),
                                 onClick = {
                                     viewModel.acceptCall()
                                     onAcceptCall()
@@ -336,7 +342,8 @@ fun IncomingCallScreen(
                                 contentColor = Color.White,
                                 size = 64.dp,
                                 iconSize = 28.dp,
-                                modifier = Modifier.weight(1f).testTag("accept_call_btn")
+                                modifier = Modifier.weight(1f),
+                                testTagOverride = "accept_call_btn"
                             )
                         }
                     }
@@ -782,21 +789,23 @@ private fun StandardIncomingActions(
         ) {
             CallActionButton(
                 icon = Icons.AutoMirrored.Filled.Message,
-                label = "Message",
+                label = stringResource(R.string.incoming_message),
                 onClick = onOpenMessages,
                 containerColor = themeColors.surfaceElevated,
                 contentColor = themeColors.primary,
                 size = 52.dp,
-                iconSize = 22.dp
+                iconSize = 22.dp,
+                testTagOverride = "call_action_Message"
             )
             CallActionButton(
                 icon = Icons.AutoMirrored.Filled.VolumeOff,
-                label = if (isSilenced) "Silenced" else "Silence",
+                label = if (isSilenced) stringResource(R.string.incoming_silenced) else stringResource(R.string.incoming_silence),
                 onClick = onToggleSilence,
                 containerColor = themeColors.surfaceElevated,
                 contentColor = if (isSilenced) themeColors.primaryGlow else themeColors.textSecondary,
                 size = 52.dp,
-                iconSize = 22.dp
+                iconSize = 22.dp,
+                testTagOverride = if (isSilenced) "call_action_Silenced" else "call_action_Silence"
             )
         }
 
@@ -807,33 +816,36 @@ private fun StandardIncomingActions(
         ) {
             CallActionButton(
                 icon = Icons.Default.CallEnd,
-                label = "End Call",
+                label = stringResource(R.string.call_action_end_call),
                 onClick = onDecline,
                 containerColor = CrimsonDecline,
                 contentColor = Color.White,
                 size = 66.dp,
                 iconSize = 30.dp,
-                modifier = Modifier.weight(1f).testTag("decline_call_btn")
+                modifier = Modifier.weight(1f),
+                testTagOverride = "decline_call_btn"
             )
             CallActionButton(
                 icon = Icons.Default.Voicemail,
-                label = "Voicemail",
+                label = stringResource(R.string.incoming_voicemail),
                 onClick = onVoicemail,
                 containerColor = Color(0xFF7C3AED),
                 contentColor = Color.White,
                 size = 66.dp,
                 iconSize = 30.dp,
-                modifier = Modifier.weight(1f).testTag("voicemail_call_btn")
+                modifier = Modifier.weight(1f),
+                testTagOverride = "voicemail_call_btn"
             )
             CallActionButton(
                 icon = Icons.Default.Call,
-                label = "Pick Up",
+                label = stringResource(R.string.incoming_pick_up),
                 onClick = onAccept,
                 containerColor = EmeraldAccept,
                 contentColor = Color.White,
                 size = 66.dp,
                 iconSize = 30.dp,
-                modifier = Modifier.weight(1f).testTag("accept_call_btn")
+                modifier = Modifier.weight(1f),
+                testTagOverride = "accept_call_btn"
             )
         }
     }

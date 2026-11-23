@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dialpad
-import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.People
@@ -50,11 +49,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.navigation.LyraDestinations
 import com.example.service.NotificationHelper
@@ -86,7 +87,6 @@ fun HomeScreen(
     onNavigateToIncomingCall: () -> Unit,
     onNavigateToScheduledCalls: () -> Unit = {},
     onNavigateToVoicemail: () -> Unit = {},
-    onNavigateToCallRecordings: () -> Unit = {},
     onNavigateTab: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -97,7 +97,6 @@ fun HomeScreen(
     val isBackgroundCallingEnabled by viewModel.isBackgroundCallingEnabled.collectAsStateWithLifecycle()
     val ownerName by viewModel.ownerName.collectAsStateWithLifecycle()
     val voicemails by viewModel.allVoicemails.collectAsStateWithLifecycle()
-    val callRecordings by viewModel.allCallRecordings.collectAsStateWithLifecycle()
     val scheduledCalls by viewModel.allScheduledCalls.collectAsStateWithLifecycle()
     val aiModelName by viewModel.aiModelName.collectAsStateWithLifecycle()
     val dashboardMediaUri by viewModel.dashboardMediaUri.collectAsStateWithLifecycle()
@@ -142,9 +141,9 @@ fun HomeScreen(
             // Top Bar with Capsule Controls
             item {
                 LyraTopBar(
-                    title = "LYRA",
-                    subtitle = "Personal Calling Assistant",
-                    statusText = if (isLyraEnabled) "● Lyra Online" else "○ Standby",
+                    title = stringResource(R.string.home_title),
+                    subtitle = stringResource(R.string.home_subtitle),
+                    statusText = if (isLyraEnabled) stringResource(R.string.home_status_online) else stringResource(R.string.home_status_standby),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     trailingActions = {
                         Surface(
@@ -237,25 +236,25 @@ fun HomeScreen(
                             ) {
                                 CapsuleStatPill(
                                     count = stats.callsToday.toString(),
-                                    label = "Calls",
+                                    label = stringResource(R.string.home_stat_calls),
                                     color = colors.primary,
                                     modifier = Modifier.weight(1f)
                                 )
                                 CapsuleStatPill(
                                     count = stats.missedCalls.toString(),
-                                    label = "Missed",
+                                    label = stringResource(R.string.home_stat_missed),
                                     color = colors.declineColor,
                                     modifier = Modifier.weight(1f)
                                 )
                                 CapsuleStatPill(
                                     count = stats.knownCallers.toString(),
-                                    label = "Known",
+                                    label = stringResource(R.string.home_stat_known),
                                     color = colors.acceptColor,
                                     modifier = Modifier.weight(1f)
                                 )
                                 CapsuleStatPill(
                                     count = stats.unknownCallers.toString(),
-                                    label = "Unknown",
+                                    label = stringResource(R.string.home_stat_unknown),
                                     color = colors.secondaryGlow,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -275,28 +274,28 @@ fun HomeScreen(
                 ) {
                     QuickActionCapsule(
                         icon = Icons.Default.Dialpad,
-                        label = "Keypad",
+                        label = stringResource(R.string.home_quick_keypad),
                         color = colors.acceptColor,
                         onClick = onNavigateToDialer,
                         modifier = Modifier.weight(1f)
                     )
                     QuickActionCapsule(
                         icon = Icons.Default.History,
-                        label = "Recents",
+                        label = stringResource(R.string.home_quick_recents),
                         color = colors.primary,
                         onClick = onNavigateToHistory,
                         modifier = Modifier.weight(1f)
                     )
                     QuickActionCapsule(
                         icon = Icons.Default.People,
-                        label = "Contacts",
+                        label = stringResource(R.string.home_quick_contacts),
                         color = colors.secondary,
                         onClick = onNavigateToContacts,
                         modifier = Modifier.weight(1f)
                     )
                     QuickActionCapsule(
                         icon = Icons.Default.Settings,
-                        label = "Settings",
+                        label = stringResource(R.string.home_quick_settings),
                         color = colors.priorityColor,
                         onClick = onNavigateToSettings,
                         modifier = Modifier.weight(1f)
@@ -338,16 +337,16 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Calling & Background Guard",
+                                        text = stringResource(R.string.home_guard_title),
                                         color = colors.textPrimary,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = if (isBackgroundCallingEnabled) {
-                                            "Persistent Notification + Lock-Screen Call UI"
+                                            stringResource(R.string.home_guard_active_desc)
                                         } else {
-                                            "Background Call Guard paused in Settings"
+                                            stringResource(R.string.home_guard_paused_desc)
                                         },
                                         color = colors.primaryGlow,
                                         fontSize = 11.sp,
@@ -359,7 +358,7 @@ fun HomeScreen(
 
                             StatusBadge(
                                 type = if (isBackgroundCallingEnabled) BadgeType.ALLOWED else BadgeType.REQUIRED,
-                                customText = if (isBackgroundCallingEnabled) "Active" else "Paused"
+                                customText = if (isBackgroundCallingEnabled) stringResource(R.string.home_status_active) else stringResource(R.string.home_status_paused)
                             )
                         }
                     }
@@ -406,13 +405,13 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Lyra AI Voicemail (${voicemails.size})",
+                                        text = stringResource(R.string.home_voicemail_title, voicemails.size),
                                         color = colors.textPrimary,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Local audio & summary • $aiModelName",
+                                        text = stringResource(R.string.home_voicemail_subtitle, aiModelName),
                                         color = colors.primaryGlow,
                                         fontSize = 11.sp,
                                         maxLines = 1,
@@ -422,72 +421,8 @@ fun HomeScreen(
                             }
 
                             CapsuleStatusChip(
-                                text = "Inbox",
+                                text = stringResource(R.string.home_voicemail_chip),
                                 color = colors.primary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Call Recordings Library Card
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    GlassCard(
-                        borderColor = colors.declineColor.copy(alpha = 0.42f),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
-                            .clickable(onClick = onNavigateToCallRecordings)
-                            .testTag("home_call_recordings_card")
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.declineColor.copy(alpha = 0.16f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.FiberManualRecord,
-                                        contentDescription = "Call Recordings",
-                                        tint = colors.declineColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = "Call Recordings (${callRecordings.size})",
-                                        color = colors.textPrimary,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Shared WAV archive • Lyra/Recordings",
-                                        color = colors.primaryGlow,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            CapsuleStatusChip(
-                                text = "Recordings",
-                                color = colors.declineColor
                             )
                         }
                     }

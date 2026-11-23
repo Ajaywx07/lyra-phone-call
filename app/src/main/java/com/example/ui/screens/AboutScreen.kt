@@ -1,13 +1,20 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,13 +27,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -36,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,6 +86,7 @@ fun AboutScreen(
     val updateStatus by viewModel?.updateCheckStatus?.collectAsStateWithLifecycle()
         ?: remember { mutableStateOf<String?>(null) }
     var repoDraft by remember(persistedRepo) { mutableStateOf(persistedRepo) }
+    var guideExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(persistedRepo) {
         if (repoDraft.isBlank()) {
@@ -100,8 +114,8 @@ fun AboutScreen(
         ) {
             item {
                 LyraTopBar(
-                    title = "ABOUT LYRA",
-                    subtitle = "Intelligence & Specifications",
+                    title = stringResource(R.string.about_title),
+                    subtitle = stringResource(R.string.about_subtitle),
                     showBack = true,
                     onBackClick = onBackClick
                 )
@@ -136,7 +150,7 @@ fun AboutScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "LYRA CALLING ASSISTANT",
+                    text = stringResource(R.string.about_brand_title),
                     color = colors.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -146,17 +160,141 @@ fun AboutScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "\"Your calls. Your privacy. Your assistant.\"",
+                    text = stringResource(R.string.about_tagline),
                     color = colors.primary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
 
+            // Expandable Framework, Guide & App Details Box
+            item {
+                GlassCard(
+                    borderColor = colors.primary.copy(alpha = 0.45f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .clickable { guideExpanded = !guideExpanded }
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("about_guide_expandable_card")
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.primary.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                        contentDescription = stringResource(R.string.about_guide_card_title),
+                                        tint = colors.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.about_guide_card_title),
+                                        color = colors.textPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.about_guide_card_subtitle),
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp
+                                    )
+                                    Text(
+                                        text = if (guideExpanded) {
+                                            stringResource(R.string.about_guide_tap_collapse)
+                                        } else {
+                                            stringResource(R.string.about_guide_tap_expand)
+                                        },
+                                        color = colors.primaryGlow,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = if (guideExpanded) {
+                                    Icons.Default.KeyboardArrowUp
+                                } else {
+                                    Icons.Default.KeyboardArrowDown
+                                },
+                                contentDescription = if (guideExpanded) {
+                                    stringResource(R.string.about_guide_tap_collapse)
+                                } else {
+                                    stringResource(R.string.about_guide_tap_expand)
+                                },
+                                tint = colors.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = guideExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp)
+                                    .testTag("about_guide_expanded_content"),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                HorizontalDivider(color = colors.glassBorder)
+                                AboutGuideSection(
+                                    title = stringResource(R.string.about_guide_section_how_to_use),
+                                    body = stringResource(R.string.about_guide_body_how_to_use)
+                                )
+                                AboutGuideSection(
+                                    title = stringResource(R.string.about_guide_section_settings),
+                                    body = stringResource(R.string.about_guide_body_settings)
+                                )
+                                AboutGuideSection(
+                                    title = stringResource(R.string.about_guide_section_recommended),
+                                    body = stringResource(R.string.about_guide_body_recommended)
+                                )
+                                AboutGuideSection(
+                                    title = stringResource(R.string.about_guide_section_dos_donts),
+                                    body = stringResource(R.string.about_guide_body_dos_donts)
+                                )
+                                AboutGuideSection(
+                                    title = stringResource(R.string.about_guide_section_framework),
+                                    body = stringResource(R.string.about_guide_body_framework)
+                                )
+                                AboutGuideSection(
+                                    title = stringResource(R.string.about_guide_section_app_details),
+                                    body = stringResource(
+                                        R.string.about_guide_body_app_details,
+                                        BuildConfig.VERSION_NAME,
+                                        BuildConfig.VERSION_CODE
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // GitHub Releases In-App Update Checker
             if (viewModel != null) {
                 item {
-                    SectionHeader(title = "App Updates (GitHub Releases)")
+                    SectionHeader(title = stringResource(R.string.about_updates_header))
 
                     GlassCard(borderColor = colors.primary.copy(alpha = 0.4f)) {
                         Column(
@@ -173,13 +311,17 @@ fun AboutScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column {
                                     Text(
-                                        text = "GitHub Release Channel",
+                                        text = stringResource(R.string.about_updates_channel),
                                         color = colors.textPrimary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Installed: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                                        text = stringResource(
+                                            R.string.about_updates_installed,
+                                            BuildConfig.VERSION_NAME,
+                                            BuildConfig.VERSION_CODE
+                                        ),
                                         color = colors.textSecondary,
                                         fontSize = 11.sp
                                     )
@@ -189,7 +331,7 @@ fun AboutScreen(
                             OutlinedTextField(
                                 value = repoDraft,
                                 onValueChange = { repoDraft = it },
-                                label = { Text("GitHub Repo (owner/repo)") },
+                                label = { Text(stringResource(R.string.about_updates_repo_label)) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
@@ -208,7 +350,11 @@ fun AboutScreen(
                                         .weight(1f)
                                         .testTag("save_github_repo_btn")
                                 ) {
-                                    Text("Save Repo", color = colors.textPrimary, fontSize = 12.sp)
+                                    Text(
+                                        text = stringResource(R.string.about_updates_save_repo),
+                                        color = colors.textPrimary,
+                                        fontSize = 12.sp
+                                    )
                                 }
                                 Button(
                                     onClick = {
@@ -238,7 +384,11 @@ fun AboutScreen(
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (isCheckingUpdates) "Checking..." else "Check Updates",
+                                        text = if (isCheckingUpdates) {
+                                            stringResource(R.string.about_updates_checking)
+                                        } else {
+                                            stringResource(R.string.about_updates_check)
+                                        },
                                         color = colors.onPrimaryButton,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
@@ -268,7 +418,7 @@ fun AboutScreen(
 
             // Developer & Ownership Card
             item {
-                SectionHeader(title = "Ownership & Architecture")
+                SectionHeader(title = stringResource(R.string.about_ownership_header))
 
                 GlassCard(borderColor = colors.glassBorderPurple) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -285,7 +435,7 @@ fun AboutScreen(
 
             // Privacy Pledge Card
             item {
-                SectionHeader(title = "Strict Privacy Pledge")
+                SectionHeader(title = stringResource(R.string.about_privacy_header))
 
                 GlassCard(borderColor = EmeraldAccept.copy(alpha = 0.35f)) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -298,7 +448,7 @@ fun AboutScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Zero Cloud Leakage Guarantee",
+                                text = stringResource(R.string.about_privacy_zero_cloud),
                                 color = EmeraldAccept,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
@@ -308,11 +458,7 @@ fun AboutScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "1. Lyra operates strictly offline and locally by default.\n" +
-                                   "2. Never uploads private contacts to external servers.\n" +
-                                   "3. Never records or streams call audio without explicit permission.\n" +
-                                   "4. All notes, summaries, and priority tags stay on this device.\n" +
-                                   "5. Complies with Google Play policies and least-privilege standards.",
+                            text = stringResource(R.string.about_privacy_points),
                             color = colors.textSecondary,
                             fontSize = 12.sp,
                             lineHeight = 18.sp
@@ -323,7 +469,7 @@ fun AboutScreen(
 
             // Open Source Technologies
             item {
-                SectionHeader(title = "Frameworks & Tooling")
+                SectionHeader(title = stringResource(R.string.about_frameworks_header))
 
                 GlassCard {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -336,7 +482,7 @@ fun AboutScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Native Android Stack",
+                                text = stringResource(R.string.about_native_stack),
                                 color = colors.textPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -360,6 +506,28 @@ fun AboutScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AboutGuideSection(title: String, body: String) {
+    val colors = LyraTheme.colors
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = title,
+            color = colors.primaryGlow,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = body,
+            color = colors.textSecondary,
+            fontSize = 11.sp,
+            lineHeight = 16.sp
+        )
     }
 }
 

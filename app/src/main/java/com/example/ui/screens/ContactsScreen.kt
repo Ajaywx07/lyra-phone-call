@@ -50,11 +50,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.R
 import com.example.domain.model.ContactItemData
 import com.example.navigation.LyraDestinations
 import com.example.ui.components.BadgeType
@@ -150,8 +152,8 @@ fun ContactsScreen(
         ) {
             item {
                 LyraTopBar(
-                    title = "CONTACTS",
-                    subtitle = "Tap for profile • Long-press to edit",
+                    title = stringResource(R.string.contacts_title),
+                    subtitle = stringResource(R.string.contacts_subtitle),
                     showBack = onNavigateTab == null,
                     onBackClick = onBackClick,
                     statusText = "",

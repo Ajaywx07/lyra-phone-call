@@ -2,8 +2,6 @@ package com.example.ui.screens
 
 import android.telecom.CallAudioState
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -35,7 +33,6 @@ import androidx.compose.material.icons.filled.BluetoothAudio
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.Dialpad
-import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Mic
@@ -45,7 +42,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SimCard
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.Button
@@ -69,6 +65,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.R
 import com.example.domain.model.CallScreenStyle
 import com.example.domain.model.CallStateEnum
 import com.example.domain.model.CallerInfo
@@ -95,8 +93,6 @@ import com.example.ui.theme.EmeraldAccept
 import com.example.ui.theme.LyraTheme
 import com.example.ui.viewmodel.LyraMainViewModel
 import com.example.utils.CallProximityManager
-import com.example.utils.CallRecordingSupportMode
-import com.example.utils.PermissionHelper
 import kotlinx.coroutines.delay
 
 @Composable
@@ -120,26 +116,12 @@ fun ActiveCallScreen(
     val conferenceCount by viewModel.conferenceParticipantCount.collectAsStateWithLifecycle()
     val canMergeConference by viewModel.canMergeConference.collectAsStateWithLifecycle()
     val isConferenceMerged by viewModel.isConferenceMerged.collectAsStateWithLifecycle()
-    val isCallRecording by viewModel.isCallRecording.collectAsStateWithLifecycle()
-    val recordingSeconds by viewModel.callRecordingSeconds.collectAsStateWithLifecycle()
-    val isCallRecordingTwoWay by viewModel.isCallRecordingTwoWay.collectAsStateWithLifecycle()
-    val recordingCapability by viewModel.callRecordingCapability.collectAsStateWithLifecycle()
     val callStatusBanner by viewModel.callStatusBanner.collectAsStateWithLifecycle()
     val screenStyle by viewModel.callScreenStyle.collectAsStateWithLifecycle()
     val animationStyle by viewModel.callAnimationStyle.collectAsStateWithLifecycle()
     val showContactPhoto by viewModel.showContactPhotoOnCall.collectAsStateWithLifecycle()
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val isNearEar by CallProximityManager.isNearEar.collectAsStateWithLifecycle()
-
-    val recordPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        viewModel.refreshRecordingCapability()
-        viewModel.loadData()
-        if (PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
-            viewModel.toggleCallRecording()
-        }
-    }
 
     val defaultCaller = CallerInfo(
         phoneNumber = "+91 98765 43210",
@@ -159,7 +141,6 @@ fun ActiveCallScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshAudioDeviceAvailability()
-        viewModel.refreshRecordingCapability()
     }
 
     val isCallOngoing = callState == CallStateEnum.DIALING || callState == CallStateEnum.ACTIVE
@@ -209,8 +190,8 @@ fun ActiveCallScreen(
     val durationFormatted = String.format("%02d:%02d", minutes, seconds)
 
     val statusText = when {
-        isHold -> "Call On Hold"
-        callState == CallStateEnum.DIALING -> "Calling via $activeSimLabel..."
+        isHold -> stringResource(R.string.call_status_on_hold)
+        callState == CallStateEnum.DIALING -> stringResource(R.string.call_status_calling_sim, activeSimLabel)
         else -> durationFormatted
     }
 
@@ -234,7 +215,7 @@ fun ActiveCallScreen(
     @Suppress("DEPRECATION")
     val isBluetoothActive = isBluetoothAvailable && (currentAudioRoute and CallAudioState.ROUTE_BLUETOOTH) != 0
     val isCustomAudioRouteActive = isSpeakerOn || isBluetoothActive
-    val hasExtraActiveState = isHold || isCallRecording || isConferenceMerged || canMergeConference
+    val hasExtraActiveState = isHold || isConferenceMerged || canMergeConference
 
     Box(
         modifier = Modifier
@@ -334,71 +315,33 @@ fun ActiveCallScreen(
                         }
                     }
 
-                    // Active Extra State Indicators (Recording / Conference / Status Banner)
-                    if (isCallRecording || conferenceCount > 1 || !callStatusBanner.isNullOrBlank()) {
+                    // Active Extra State Indicators (Conference / Status Banner)
+                    if (conferenceCount > 1 || !callStatusBanner.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (isCallRecording) {
-                                val recFormatted = String.format(
-                                    "%02d:%02d",
-                                    recordingSeconds / 60,
-                                    recordingSeconds % 60
-                                )
-                                Surface(
-                                    color = CrimsonDecline.copy(alpha = 0.22f),
-                                    shape = CircleShape,
-                                    border = BorderStroke(1.dp, CrimsonDecline.copy(alpha = 0.6f)),
-                                    modifier = Modifier.testTag("active_call_recording_badge")
+                        if (conferenceCount > 1) {
+                            Surface(
+                                color = EmeraldAccept.copy(alpha = 0.18f),
+                                shape = CircleShape,
+                                border = BorderStroke(1.dp, EmeraldAccept.copy(alpha = 0.55f)),
+                                modifier = Modifier.testTag("active_call_conference_badge")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.FiberManualRecord,
-                                            contentDescription = "Recording active",
-                                            tint = CrimsonDecline,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "REC $recFormatted",
-                                            color = overlayTextPrimary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (conferenceCount > 1) {
-                                Surface(
-                                    color = EmeraldAccept.copy(alpha = 0.18f),
-                                    shape = CircleShape,
-                                    border = BorderStroke(1.dp, EmeraldAccept.copy(alpha = 0.55f)),
-                                    modifier = Modifier.testTag("active_call_conference_badge")
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Groups,
-                                            contentDescription = "Conference call",
-                                            tint = EmeraldAccept,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (isConferenceMerged) "Conference • $conferenceCount" else "$conferenceCount Callers",
-                                            color = EmeraldAccept,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Groups,
+                                        contentDescription = "Conference call",
+                                        tint = EmeraldAccept,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (isConferenceMerged) "Conference • $conferenceCount" else "$conferenceCount Callers",
+                                        color = EmeraldAccept,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
@@ -506,88 +449,6 @@ fun ActiveCallScreen(
                     }
                 }
 
-                // Clear 1-Tap Call Recording Capsule + Android/OEM 2-Way Restriction Indicator
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 400.dp)
-                        .fillMaxWidth()
-                        .padding(bottom = if (compactHeight) 8.dp else 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val recFormatted = String.format("%02d:%02d", recordingSeconds / 60, recordingSeconds % 60)
-                    val recButtonColor = if (isCallRecording) {
-                        CrimsonDecline.copy(alpha = 0.24f)
-                    } else {
-                        overlayButtonSurface
-                    }
-                    val recBorderColor = if (isCallRecording) {
-                        CrimsonDecline.copy(alpha = 0.78f)
-                    } else {
-                        accentColor.copy(alpha = 0.42f)
-                    }
-                    Surface(
-                        onClick = {
-                            if (isCallRecording || PermissionHelper.hasCallRecordingRequiredPermissions(context)) {
-                                viewModel.toggleCallRecording()
-                            } else {
-                                recordPermissionLauncher.launch(PermissionHelper.getCallRecordingRuntimePermissions())
-                            }
-                        },
-                        shape = CircleShape,
-                        color = recButtonColor,
-                        border = BorderStroke(1.dp, recBorderColor),
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("active_call_record_btn")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isCallRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
-                                contentDescription = if (isCallRecording) "Stop Call Recording" else "Start Call Recording",
-                                tint = CrimsonDecline,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isCallRecording) {
-                                    "Stop Recording • $recFormatted"
-                                } else {
-                                    "Record Call"
-                                },
-                                color = overlayTextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    val restrictionNote = when {
-                        isCallRecording && isCallRecordingTwoWay -> "Two-way audio active • Saving to Lyra/Recordings"
-                        isCallRecording -> "Mic-only active (Android restricts 2-way line capture)"
-                        recordingCapability.mode == CallRecordingSupportMode.MIC_ONLY_RESTRICTED ->
-                            "Mic-only mode • Android restricts 2-way line capture"
-                        recordingCapability.mode == CallRecordingSupportMode.PERMISSION_REQUIRED ->
-                            "Mic permission required for call recording"
-                        else -> "Two-way recording ready • Lyra/Recordings"
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = restrictionNote,
-                        color = if (isCallRecording) CrimsonDecline else overlayHintColor.copy(alpha = 0.85f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.testTag("active_call_recording_capability_note")
-                    )
-                }
-
                 // Fixed Bottom Controls Dock (Non-Scrolling 2-Row × 3-Column Grid + 70% End Call Pill)
                 Column(
                     modifier = Modifier
@@ -607,13 +468,14 @@ fun ActiveCallScreen(
                     ) {
                         CallActionButton(
                             icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                            label = if (isMuted) "Unmute" else "Mute",
+                            label = if (isMuted) stringResource(R.string.call_action_unmute) else stringResource(R.string.call_action_mute),
                             onClick = { viewModel.toggleMute() },
                             containerColor = if (isMuted) colors.secondary else overlayButtonSurface,
                             contentColor = if (isMuted) colors.onSecondaryButton else overlayTextPrimary,
                             size = actionCircleSize,
                             iconSize = 24.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            testTagOverride = if (isMuted) "call_action_Unmute" else "call_action_Mute"
                         )
 
                         CallActionButton(
@@ -622,7 +484,7 @@ fun ActiveCallScreen(
                                 isSpeakerOn -> Icons.Default.VolumeUp
                                 else -> Icons.Default.Hearing
                             },
-                            label = "Audio",
+                            label = stringResource(R.string.call_action_audio),
                             onClick = {
                                 viewModel.refreshAudioDeviceAvailability()
                                 showAudioRouteMenu = true
@@ -631,18 +493,20 @@ fun ActiveCallScreen(
                             contentColor = if (isCustomAudioRouteActive) onAccentColor else overlayTextPrimary,
                             size = actionCircleSize,
                             iconSize = 24.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            testTagOverride = "call_action_Audio"
                         )
 
                         CallActionButton(
                             icon = Icons.Default.Dialpad,
-                            label = "Keypad",
+                            label = stringResource(R.string.call_action_keypad),
                             onClick = { showKeypadDialog = true },
                             containerColor = if (showKeypadDialog) accentColor.copy(alpha = 0.25f) else overlayButtonSurface,
                             contentColor = overlayTextPrimary,
                             size = actionCircleSize,
                             iconSize = 24.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            testTagOverride = "call_action_Keypad"
                         )
                     }
 
@@ -659,7 +523,7 @@ fun ActiveCallScreen(
                     ) {
                         CallActionButton(
                             icon = if (showMergeButton) Icons.Default.CallMerge else Icons.Default.PersonAdd,
-                            label = if (showMergeButton) "Merge" else "Add Call",
+                            label = if (showMergeButton) stringResource(R.string.call_action_merge) else stringResource(R.string.call_action_add_call),
                             onClick = {
                                 if (showMergeButton) {
                                     viewModel.mergeConferenceCalls()
@@ -679,39 +543,44 @@ fun ActiveCallScreen(
                             },
                             size = actionCircleSize,
                             iconSize = 24.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            testTagOverride = if (showMergeButton) "call_action_Merge" else "call_action_Add Call"
                         )
 
                         CallActionButton(
                             icon = if (isHold) Icons.Default.PlayArrow else Icons.Default.Pause,
-                            label = if (isHold) "Resume" else "Hold",
+                            label = if (isHold) stringResource(R.string.call_action_resume) else stringResource(R.string.call_action_hold),
                             onClick = { viewModel.toggleHold() },
                             containerColor = if (isHold) AmberPriority else overlayButtonSurface,
                             contentColor = if (isHold) Color.Black else overlayTextPrimary,
                             size = actionCircleSize,
                             iconSize = 24.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            testTagOverride = if (isHold) "call_action_Resume" else "call_action_Hold"
                         )
 
                         CallActionButton(
                             icon = Icons.Default.MoreHoriz,
-                            label = "More",
+                            label = stringResource(R.string.call_action_more),
                             onClick = { showMoreSheet = true },
                             containerColor = if (hasExtraActiveState) accentColor.copy(alpha = 0.24f) else overlayButtonSurface,
                             contentColor = if (hasExtraActiveState) accentColor else overlayTextPrimary,
                             size = actionCircleSize,
                             iconSize = 24.dp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            testTagOverride = "call_action_More"
                         )
                     }
 
                     Spacer(modifier = Modifier.height(if (compactHeight) 18.dp else 28.dp))
 
                     // End / Cancel Call Stretched Pill (~70% width relative to main controls container)
-                    val endLabel = if (callState == CallStateEnum.DIALING || callState == CallStateEnum.IDLE) {
-                        "Cancel Call"
+                    val isCanceling = callState == CallStateEnum.DIALING || callState == CallStateEnum.IDLE
+                    val endTag = if (isCanceling) "Cancel Call" else "End Call"
+                    val endLabel = if (isCanceling) {
+                        stringResource(R.string.call_action_cancel_call)
                     } else {
-                        "End Call"
+                        stringResource(R.string.call_action_end_call)
                     }
                     Box(
                         modifier = Modifier.fillMaxWidth(),
@@ -728,7 +597,7 @@ fun ActiveCallScreen(
                             modifier = Modifier
                                 .fillMaxWidth(0.70f)
                                 .height(58.dp)
-                                .testTag("call_action_$endLabel")
+                                .testTag("call_action_$endTag")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CallEnd,
@@ -794,15 +663,12 @@ fun ActiveCallScreen(
     if (showMoreSheet) {
         InCallMoreOptionsSheet(
             isHold = isHold,
-            isRecording = isCallRecording,
-            recordingSeconds = recordingSeconds,
             conferenceParticipantCount = conferenceCount,
             canMergeConference = canMergeConference,
             isConferenceMerged = isConferenceMerged,
             currentAudioRoute = currentAudioRoute,
             isBluetoothAvailable = isBluetoothAvailable,
             onToggleHold = { viewModel.toggleHold() },
-            onToggleRecording = { viewModel.toggleCallRecording() },
             onAddCallClick = { showAddCallScreen = true },
             onMergeConference = { viewModel.mergeConferenceCalls() },
             onSelectAudioRoute = { route -> viewModel.selectAudioRoute(route) },

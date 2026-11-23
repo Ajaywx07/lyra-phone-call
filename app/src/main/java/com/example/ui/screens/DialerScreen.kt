@@ -2,9 +2,14 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -87,6 +92,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -99,6 +105,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.domain.model.CallHistoryItemData
 import com.example.domain.model.ContactItemData
 import com.example.navigation.LyraDestinations
@@ -460,9 +467,9 @@ fun DialerScreen(
         ) {
         // Tighter Top Header for cleaner vertical hierarchy with minimal empty space
         LyraTopBar(
-            title = "DIALPAD",
-            subtitle = "Dual-SIM Phone & Assistant",
-            statusText = "● AI Active",
+            title = stringResource(R.string.dialer_title),
+            subtitle = stringResource(R.string.dialer_subtitle),
+            statusText = stringResource(R.string.dialer_status_ai_active),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 3.dp)
         )
 
@@ -487,7 +494,7 @@ fun DialerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     SimCapsuleTab(
-                        label = "Ask",
+                        label = stringResource(R.string.dialer_sim_ask),
                         isSelected = preferredSim == SimManager.SIM_ASK,
                         onClick = {
                             viewModel.setPreferredSim(SimManager.SIM_ASK)
@@ -497,7 +504,7 @@ fun DialerScreen(
                         testTag = "sim_pill_ask"
                     )
                     SimCapsuleTab(
-                        label = "SIM 1",
+                        label = stringResource(R.string.dialer_sim_1),
                         isSelected = preferredSim == SimManager.SIM_1,
                         onClick = {
                             viewModel.setPreferredSim(SimManager.SIM_1)
@@ -507,7 +514,7 @@ fun DialerScreen(
                         testTag = "sim_pill_${SimManager.SIM_1}"
                     )
                     SimCapsuleTab(
-                        label = "SIM 2",
+                        label = stringResource(R.string.dialer_sim_2),
                         isSelected = preferredSim == SimManager.SIM_2,
                         onClick = {
                             viewModel.setPreferredSim(SimManager.SIM_2)
@@ -521,251 +528,305 @@ fun DialerScreen(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            if (isSuggestionsExpanded) {
-                // Expanded vertical list of all matching contacts (hides keypad & covers screen)
-                var collapseDragAccumulator by remember { mutableFloatStateOf(0f) }
-                Surface(
-                    color = colors.surfaceElevated,
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f)),
+            // Invariant full-height container matching Contacts & Recents tabs whether dialpad is open or closed
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .testTag("dialer_background_list_container")
+            ) {
+                val isCompactHeight = maxHeight < 520.dp
+                val lipHeight = 10.dp
+                val inputHeight = if (isCompactHeight) 52.dp else 56.dp
+                val keySize = if (isCompactHeight) 52.dp else 60.dp
+                val keyRowGap = if (isCompactHeight) 6.dp else 8.dp
+                val gridVerticalGap = if (isCompactHeight) 8.dp else 10.dp
+                val actionRowHeight = if (isCompactHeight) 54.dp else 58.dp
+                val bottomAnchorMargin = if (isCompactHeight) 6.dp else 8.dp
+                val opaquePadHeight =
+                    inputHeight +
+                        gridVerticalGap +
+                        (keySize * 4 + keyRowGap * 3) +
+                        gridVerticalGap +
+                        actionRowHeight +
+                        bottomAnchorMargin
+
+                val exposedHeight = (maxHeight - opaquePadHeight).coerceAtLeast(60.dp)
+                val slotGap = 8.dp
+                val slotCount = ((exposedHeight + slotGap) / 68.dp).roundToInt().coerceAtLeast(2)
+                val dynamicCardHeight =
+                    ((exposedHeight - slotGap * (slotCount - 1)) / (slotCount - 0.27f))
+                        .coerceIn(54.dp, 68.dp)
+                val upperSuggestions = matchingSuggestions.take(slotCount)
+                val continuationSuggestions = matchingSuggestions.drop(slotCount).take(6)
+                val fillsUpperToLip = upperSuggestions.size == slotCount && upperSuggestions.size >= 2
+
+                // Layer 1: Background List Container (always spans full height down to bottom nav bar)
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .padding(horizontal = 16.dp)
-                        .height(48.dp)
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragEnd = { collapseDragAccumulator = 0f },
-                                onDragCancel = { collapseDragAccumulator = 0f },
-                                onVerticalDrag = { _, dragAmount ->
-                                    collapseDragAccumulator += dragAmount
-                                    if (abs(collapseDragAccumulator) > 36f) {
-                                        isSuggestionsExpanded = false
-                                        collapseDragAccumulator = 0f
+                        .clipToBounds()
+                        .testTag("dialer_background_list")
+                ) {
+                    if (isSuggestionsExpanded) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            var collapseDragAccumulator by remember { mutableFloatStateOf(0f) }
+                            Surface(
+                                color = colors.surfaceElevated,
+                                shape = CircleShape,
+                                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .pointerInput(Unit) {
+                                        detectVerticalDragGestures(
+                                            onDragEnd = { collapseDragAccumulator = 0f },
+                                            onDragCancel = { collapseDragAccumulator = 0f },
+                                            onVerticalDrag = { _, dragAmount ->
+                                                collapseDragAccumulator += dragAmount
+                                                if (abs(collapseDragAccumulator) > 36f) {
+                                                    isSuggestionsExpanded = false
+                                                    collapseDragAccumulator = 0f
+                                                }
+                                            }
+                                        )
+                                    }
+                                    .clickable { isSuggestionsExpanded = false }
+                                    .testTag("dialer_collapse_suggestions_btn")
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Dialpad,
+                                            contentDescription = stringResource(R.string.dialer_show_keypad),
+                                            tint = colors.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (dialedNumber.isNotBlank()) {
+                                                stringResource(
+                                                    R.string.dialer_matches_for,
+                                                    dialedNumber,
+                                                    matchingSuggestions.size
+                                                )
+                                            } else {
+                                                stringResource(
+                                                    R.string.dialer_contacts_and_recent,
+                                                    matchingSuggestions.size
+                                                )
+                                            },
+                                            color = colors.textPrimary,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = stringResource(R.string.dialer_keypad_label),
+                                            color = colors.primary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowUp,
+                                            contentDescription = stringResource(R.string.dialer_collapse_suggestions),
+                                            tint = colors.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                 }
-                            )
-                        }
-                        .clickable { isSuggestionsExpanded = false }
-                        .testTag("dialer_collapse_suggestions_btn")
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Dialpad,
-                                contentDescription = "Show Keypad",
-                                tint = colors.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (dialedNumber.isNotBlank()) {
-                                    "Matches for \"$dialedNumber\" (${matchingSuggestions.size})"
-                                } else {
-                                    "Contacts & Recent (${matchingSuggestions.size})"
-                                },
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Keypad",
-                                color = colors.primary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Collapse Suggestions",
-                                tint = colors.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (matchingSuggestions.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .testTag("dialer_expanded_contacts_list"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No matching contacts for \"$dialedNumber\".\nSwipe or tap Keypad to return.",
-                            color = colors.textMuted,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .testTag("dialer_expanded_contacts_list"),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 14.dp)
-                    ) {
-                        items(matchingSuggestions, key = { it.id }) { suggestion ->
-                            ExpandedSuggestionRow(
-                                suggestion = suggestion,
-                                onSelect = {
-                                    setDialNumber(suggestion.phoneNumber)
-                                    isSuggestionsExpanded = false
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                                onCallClick = { initiateDialCall(suggestion.phoneNumber) },
-                                onAvatarClick = suggestion.contact?.let { contactItem ->
-                                    {
-                                        viewModel.selectContact(contactItem)
-                                        onNavigateToContactDetails(contactItem.phoneNumber)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            } else {
-                // Bottom-anchored Keypad/Input/Action Controls + Upper Recent/Suggestions Area
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    val isCompactHeight = maxHeight < 520.dp
-                    val lipHeight = 10.dp
-                    val inputHeight = if (isCompactHeight) 52.dp else 56.dp
-                    val keySize = if (isCompactHeight) 52.dp else 60.dp
-                    val keyRowGap = if (isCompactHeight) 6.dp else 8.dp
-                    val gridVerticalGap = if (isCompactHeight) 8.dp else 10.dp
-                    val actionRowHeight = if (isCompactHeight) 54.dp else 58.dp
-                    val bottomAnchorMargin = if (isCompactHeight) 6.dp else 8.dp
-                    val opaquePadHeight =
-                        inputHeight +
-                            gridVerticalGap +
-                            (keySize * 4 + keyRowGap * 3) +
-                            gridVerticalGap +
-                            actionRowHeight +
-                            bottomAnchorMargin
-
-                    val exposedHeight = (maxHeight - opaquePadHeight).coerceAtLeast(60.dp)
-                    val slotGap = 8.dp
-                    val slotCount = ((exposedHeight + slotGap) / 68.dp).roundToInt().coerceAtLeast(2)
-                    val dynamicCardHeight =
-                        ((exposedHeight - slotGap * (slotCount - 1)) / (slotCount - 0.27f))
-                            .coerceIn(54.dp, 68.dp)
-                    val upperSuggestions = matchingSuggestions.take(slotCount)
-                    val fillsUpperToLip = upperSuggestions.size == slotCount && upperSuggestions.size >= 2
-
-                    var dragAccumulator by remember { mutableFloatStateOf(0f) }
-
-                    // Upper Space: Recent calls & contact suggestions filling cleanly from SIM capsule down to number pad
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .height(exposedHeight)
-                            .align(Alignment.TopCenter)
-                            .pointerInput(matchingSuggestions.isNotEmpty()) {
-                                detectVerticalDragGestures(
-                                    onDragEnd = { dragAccumulator = 0f },
-                                    onDragCancel = { dragAccumulator = 0f },
-                                    onVerticalDrag = { _, dragAmount ->
-                                        dragAccumulator += dragAmount
-                                        if (abs(dragAccumulator) > 36f) {
-                                            isSuggestionsExpanded = true
-                                            dragAccumulator = 0f
-                                        }
-                                    }
-                                )
                             }
-                            .testTag("dialer_suggestion_area")
-                    ) {
-                        Column(
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            if (matchingSuggestions.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .testTag("dialer_expanded_contacts_list"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.dialer_no_matches, dialedNumber),
+                                        color = colors.textMuted,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .testTag("dialer_expanded_contacts_list"),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(bottom = 14.dp)
+                                ) {
+                                    items(matchingSuggestions, key = { it.id }) { suggestion ->
+                                        ExpandedSuggestionRow(
+                                            suggestion = suggestion,
+                                            onSelect = {
+                                                setDialNumber(suggestion.phoneNumber)
+                                                isSuggestionsExpanded = false
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            },
+                                            onCallClick = { initiateDialCall(suggestion.phoneNumber) },
+                                            onAvatarClick = suggestion.contact?.let { contactItem ->
+                                                {
+                                                    viewModel.selectContact(contactItem)
+                                                    onNavigateToContactDetails(contactItem.phoneNumber)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        var dragAccumulator by remember { mutableFloatStateOf(0f) }
+
+                        // Full-height background continuation behind the dialpad sheet so container never resizes
+                        if (continuationSuggestions.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(top = (dynamicCardHeight + slotGap) * upperSuggestions.size)
+                                    .wrapContentHeight(align = Alignment.Top, unbounded = true),
+                                verticalArrangement = Arrangement.spacedBy(slotGap)
+                            ) {
+                                continuationSuggestions.forEach { suggestion ->
+                                    TopDialerSuggestionCard(
+                                        suggestion = suggestion,
+                                        onFillNumber = { setDialNumber(suggestion.phoneNumber) },
+                                        onQuickCall = { initiateDialCall(suggestion.phoneNumber) },
+                                        onExpandClick = { isSuggestionsExpanded = true },
+                                        showExpandButton = false,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(dynamicCardHeight),
+                                        callButtonTestTag = "dialer_bg_suggestion_call_${suggestion.id}"
+                                    )
+                                }
+                            }
+                        }
+
+                        // Upper exposed Space: Recent calls & contact suggestions filling cleanly from SIM capsule down to number pad
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .wrapContentHeight(align = Alignment.Top, unbounded = true),
-                            verticalArrangement = Arrangement.spacedBy(slotGap)
+                                .height(exposedHeight)
+                                .align(Alignment.TopCenter)
+                                .pointerInput(matchingSuggestions.isNotEmpty()) {
+                                    detectVerticalDragGestures(
+                                        onDragEnd = { dragAccumulator = 0f },
+                                        onDragCancel = { dragAccumulator = 0f },
+                                        onVerticalDrag = { _, dragAmount ->
+                                            dragAccumulator += dragAmount
+                                            if (abs(dragAccumulator) > 36f) {
+                                                isSuggestionsExpanded = true
+                                                dragAccumulator = 0f
+                                            }
+                                        }
+                                    )
+                                }
+                                .testTag("dialer_suggestion_area")
                         ) {
-                            upperSuggestions.forEachIndexed { index, suggestion ->
-                                val isBottomEdgeFaded = fillsUpperToLip && index == upperSuggestions.lastIndex
-                                val cardTag = when {
-                                    index == 0 -> "dialer_top_suggestion_card"
-                                    isBottomEdgeFaded -> "dialer_bottom_faded_suggestion_card"
-                                    else -> "dialer_suggestion_card_$index"
-                                }
-                                val callBtnTag = when {
-                                    index == 0 -> "dialer_suggestion_call_btn"
-                                    isBottomEdgeFaded -> "dialer_bottom_faded_suggestion_call_btn"
-                                    else -> "dialer_suggestion_call_btn_$index"
-                                }
-
-                                val baseModifier = Modifier
+                            Column(
+                                modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(dynamicCardHeight)
+                                    .wrapContentHeight(align = Alignment.Top, unbounded = true),
+                                verticalArrangement = Arrangement.spacedBy(slotGap)
+                            ) {
+                                upperSuggestions.forEachIndexed { index, suggestion ->
+                                    val isBottomEdgeFaded = fillsUpperToLip && index == upperSuggestions.lastIndex
+                                    val cardTag = when {
+                                        index == 0 -> "dialer_top_suggestion_card"
+                                        isBottomEdgeFaded -> "dialer_bottom_faded_suggestion_card"
+                                        else -> "dialer_suggestion_card_$index"
+                                    }
+                                    val callBtnTag = when {
+                                        index == 0 -> "dialer_suggestion_call_btn"
+                                        isBottomEdgeFaded -> "dialer_bottom_faded_suggestion_call_btn"
+                                        else -> "dialer_suggestion_call_btn_$index"
+                                    }
 
-                                val finalModifier = if (isBottomEdgeFaded) {
-                                    baseModifier
-                                        .graphicsLayer {
-                                            compositingStrategy = CompositingStrategy.Offscreen
-                                            alpha = 0.80f
-                                        }
-                                        .drawWithContent {
-                                            drawContent()
-                                            drawRect(
-                                                brush = Brush.verticalGradient(
-                                                    colorStops = arrayOf(
-                                                        0.0f to Color.Black,
-                                                        0.45f to Color.Black.copy(alpha = 0.85f),
-                                                        0.74f to Color.Black.copy(alpha = 0.28f),
-                                                        1.0f to Color.Transparent
-                                                    )
-                                                ),
-                                                blendMode = BlendMode.DstIn
-                                            )
-                                        }
-                                        .testTag(cardTag)
-                                } else {
-                                    baseModifier.testTag(cardTag)
+                                    val baseModifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(dynamicCardHeight)
+
+                                    val finalModifier = if (isBottomEdgeFaded) {
+                                        baseModifier
+                                            .graphicsLayer {
+                                                compositingStrategy = CompositingStrategy.Offscreen
+                                                alpha = 0.80f
+                                            }
+                                            .drawWithContent {
+                                                drawContent()
+                                                drawRect(
+                                                    brush = Brush.verticalGradient(
+                                                        colorStops = arrayOf(
+                                                            0.0f to Color.Black,
+                                                            0.45f to Color.Black.copy(alpha = 0.85f),
+                                                            0.74f to Color.Black.copy(alpha = 0.28f),
+                                                            1.0f to Color.Transparent
+                                                        )
+                                                    ),
+                                                    blendMode = BlendMode.DstIn
+                                                )
+                                            }
+                                            .testTag(cardTag)
+                                    } else {
+                                        baseModifier.testTag(cardTag)
+                                    }
+
+                                    TopDialerSuggestionCard(
+                                        suggestion = suggestion,
+                                        onFillNumber = {
+                                            setDialNumber(suggestion.phoneNumber)
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        },
+                                        onQuickCall = { initiateDialCall(suggestion.phoneNumber) },
+                                        onExpandClick = { isSuggestionsExpanded = true },
+                                        showExpandButton = index == 0,
+                                        modifier = finalModifier,
+                                        callButtonTestTag = callBtnTag
+                                    )
                                 }
-
-                                TopDialerSuggestionCard(
-                                    suggestion = suggestion,
-                                    onFillNumber = {
-                                        setDialNumber(suggestion.phoneNumber)
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    },
-                                    onQuickCall = { initiateDialCall(suggestion.phoneNumber) },
-                                    onExpandClick = { isSuggestionsExpanded = true },
-                                    showExpandButton = index == 0,
-                                    modifier = finalModifier,
-                                    callButtonTestTag = callBtnTag
-                                )
                             }
                         }
                     }
+                }
 
-                    // Bottom-Anchored Foreground Number Pad Section: feathered lip + fixed number display, keypad & actions near footer
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                    ) {
+                // Layer 2: Bottom-Anchored Foreground Dialpad Sheet Overlay (toggled by bottom Dialpad button or swipe/chevron)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isSuggestionsExpanded,
+                    enter = slideInVertically(
+                        animationSpec = tween(170, easing = FastOutSlowInEasing),
+                        initialOffsetY = { it }
+                    ) + fadeIn(tween(130)),
+                    exit = slideOutVertically(
+                        animationSpec = tween(150, easing = FastOutSlowInEasing),
+                        targetOffsetY = { it }
+                    ) + fadeOut(tween(110)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -815,7 +876,7 @@ fun DialerScreen(
                                     ) {
                                         if (dialedNumber.isEmpty()) {
                                             Text(
-                                                text = "Dial number using keypad",
+                                                text = stringResource(R.string.dialer_input_hint),
                                                 color = colors.textMuted.copy(alpha = 0.65f),
                                                 fontSize = 15.sp,
                                                 lineHeight = 20.sp,
@@ -876,6 +937,7 @@ fun DialerScreen(
                                         modifier = Modifier.size(40.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
+                                        val pasteInvalidMsg = stringResource(R.string.dialer_paste_invalid)
                                         if (dialedNumber.isEmpty() && clipboardManager.hasText()) {
                                             IconButton(
                                                 onClick = {
@@ -887,7 +949,7 @@ fun DialerScreen(
                                                     } else if (rawClipboard.isNotBlank()) {
                                                         Toast.makeText(
                                                             context,
-                                                            "Only numeric phone numbers can be pasted",
+                                                            pasteInvalidMsg,
                                                             Toast.LENGTH_SHORT
                                                         ).show()
                                                     }
@@ -896,7 +958,7 @@ fun DialerScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.ContentPaste,
-                                                    contentDescription = "Paste number",
+                                                    contentDescription = stringResource(R.string.dialer_paste_number),
                                                     tint = colors.primary,
                                                     modifier = Modifier.size(18.dp)
                                                 )
@@ -908,7 +970,7 @@ fun DialerScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Clear,
-                                                    contentDescription = "Clear number",
+                                                    contentDescription = stringResource(R.string.dialer_clear_number),
                                                     tint = colors.textMuted,
                                                     modifier = Modifier.size(18.dp)
                                                 )
@@ -994,7 +1056,7 @@ fun DialerScreen(
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 imageVector = Icons.Default.PersonAdd,
-                                                contentDescription = "Add to Contacts",
+                                                contentDescription = stringResource(R.string.dialer_add_to_contacts),
                                                 tint = colors.primary,
                                                 modifier = Modifier.size(21.dp)
                                             )
@@ -1033,7 +1095,7 @@ fun DialerScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Call,
-                                                    contentDescription = "Place Call",
+                                                    contentDescription = stringResource(R.string.dialer_place_call),
                                                     tint = Color.White,
                                                     modifier = Modifier.size(24.dp)
                                                 )
@@ -1079,7 +1141,7 @@ fun DialerScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.Backspace,
-                                            contentDescription = "Delete",
+                                            contentDescription = stringResource(R.string.action_delete),
                                             tint = colors.textSecondary,
                                             modifier = Modifier.size(21.dp)
                                         )
@@ -1094,11 +1156,16 @@ fun DialerScreen(
             }
         }
 
-        // Strictly fixed Bottom Navigation Footer
+        // Strictly fixed Bottom Navigation Footer — tapping active Dialpad toggles dialpad visibility
         LyraBottomNavBar(
             currentRoute = LyraDestinations.DIALER,
             onNavigate = onNavigateTab,
-            unreadMissedCount = unreadMissedCount
+            unreadMissedCount = unreadMissedCount,
+            onReselectTab = { route ->
+                if (route == LyraDestinations.DIALER) {
+                    isSuggestionsExpanded = !isSuggestionsExpanded
+                }
+            }
         )
     }
     }
@@ -1134,7 +1201,7 @@ fun DialerScreen(
             onDismissRequest = { showAddContactDialog = false },
             title = {
                 Text(
-                    text = "Save to Contacts",
+                    text = stringResource(R.string.dialer_save_to_contacts),
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
@@ -1142,7 +1209,7 @@ fun DialerScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Number: $dialedNumber",
+                        text = stringResource(R.string.dialer_number_prefix, dialedNumber),
                         color = colors.primaryGlow,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1200,12 +1267,12 @@ fun DialerScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
                     modifier = Modifier.testTag("save_contact_confirm_btn")
                 ) {
-                    Text("Save", color = colors.onPrimaryButton, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.action_save), color = colors.onPrimaryButton, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showAddContactDialog = false }) {
-                    Text("Cancel", color = colors.textMuted)
+                    Text(stringResource(R.string.action_cancel), color = colors.textMuted)
                 }
             },
             containerColor = colors.surfaceElevated,

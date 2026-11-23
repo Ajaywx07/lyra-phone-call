@@ -33,12 +33,15 @@ interface TelecomCallBridge {
     fun mergeConference() {}
     fun silenceRinger() {}
     fun sendDtmf(digit: Char)
+    fun hasLiveCalls(): Boolean = false
+    fun syncCallsState() {}
 }
 
 object CallStateManager {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var timerJob: Job? = null
+    @Volatile
     private var telecomBridge: TelecomCallBridge? = null
     @Volatile
     private var appContext: Context? = null
@@ -46,7 +49,6 @@ object CallStateManager {
     fun bindApplicationContext(context: Context) {
         val ctx = context.applicationContext ?: context
         appContext = ctx
-        CallRecordingCoordinator.bindApplicationContext(ctx)
     }
 
     private val _callState = MutableStateFlow(CallStateEnum.IDLE)
@@ -131,7 +133,21 @@ object CallStateManager {
         }
     }
 
+    fun unregisterTelecomBridgeIfMatches(bridge: TelecomCallBridge) {
+        if (telecomBridge === bridge) {
+            registerTelecomBridge(null)
+        }
+    }
+
     fun hasTelecomBridge(): Boolean = telecomBridge != null
+
+    fun hasLiveTelecomCall(): Boolean {
+        return !_isSimulatedCall.value && (telecomBridge?.hasLiveCalls() == true)
+    }
+
+    fun syncWithLiveTelecomBridge() {
+        telecomBridge?.syncCallsState()
+    }
 
     fun isOngoingCall(): Boolean {
         val state = _callState.value
@@ -238,8 +254,10 @@ object CallStateManager {
     }
 
     fun acceptActiveCall() {
-        telecomBridge?.answerCall()
+        val bridge = telecomBridge
+        bridge?.answerCall()
         onCallAnswered()
+        bridge?.syncCallsState()
     }
 
     /**
@@ -317,7 +335,6 @@ object CallStateManager {
     }
 
     fun cancelDialingOrUnconnectedCall() {
-        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = false)
         terminateLiveTelecomCall()
         clearState()
     }
@@ -330,17 +347,14 @@ object CallStateManager {
         if (_callState.value == CallStateEnum.VOICEMAIL) {
             restoreAfterVoicemail()
         }
-        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = true)
         terminateLiveTelecomCall()
         onCallEnded(callRepository, onSummaryReady)
     }
 
     fun onCallEnded(callRepository: CallRepository? = null, onSummaryReady: ((CallSummary) -> Unit)? = null) {
         if (_callState.value == CallStateEnum.DISCONNECTED || _callState.value == CallStateEnum.IDLE) {
-            CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = true)
             return
         }
-        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = true)
         timerJob?.cancel()
         val caller = _currentCaller.value
         val duration = _callDurationSeconds.value
@@ -380,7 +394,13 @@ object CallStateManager {
     fun toggleMute() {
         val newValue = !_isMuted.value
         _isMuted.value = newValue
-        telecomBridge?.applyMute(newValue)
+        val bridge = telecomBridge
+        if (bridge != null) {
+            bridge.applyMute(newValue)
+        } else {
+            val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            runCatching { am?.isMicrophoneMute = newValue }
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -388,14 +408,28 @@ object CallStateManager {
         val newValue = !_isSpeakerOn.value
         _isSpeakerOn.value = newValue
         _currentAudioRoute.value = if (newValue) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE
-        telecomBridge?.setSpeaker(newValue)
+        val bridge = telecomBridge
+        if (bridge != null) {
+            bridge.setSpeaker(newValue)
+        } else {
+            val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            runCatching { am?.isSpeakerphoneOn = newValue }
+        }
     }
 
     @Suppress("DEPRECATION")
     fun selectAudioRoute(route: Int) {
         _currentAudioRoute.value = route
-        _isSpeakerOn.value = route == CallAudioState.ROUTE_SPEAKER
-        telecomBridge?.setAudioRouteMode(route)
+        _isSpeakerOn.value = (route and CallAudioState.ROUTE_SPEAKER) != 0
+        val bridge = telecomBridge
+        if (bridge != null) {
+            bridge.setAudioRouteMode(route)
+        } else {
+            val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            runCatching {
+                am?.isSpeakerphoneOn = (route and CallAudioState.ROUTE_SPEAKER) != 0
+            }
+        }
     }
 
     fun toggleHold() {
@@ -518,7 +552,6 @@ object CallStateManager {
     @Suppress("DEPRECATION")
     fun clearState() {
         timerJob?.cancel()
-        CallRecordingCoordinator.stopAndSaveIfActive(appContext, save = false)
         if (_callState.value == CallStateEnum.VOICEMAIL) {
             restoreAfterVoicemail()
         }

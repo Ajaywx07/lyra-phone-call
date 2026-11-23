@@ -41,13 +41,10 @@ class AudioRecorderManager(private val context: Context) {
 
     enum class CaptureSource(
         val audioSourceId: Int,
-        val label: String,
-        val isTwoWay: Boolean
+        val label: String
     ) {
-        VOICE_CALL(MediaRecorder.AudioSource.VOICE_CALL, "VOICE_CALL", true),
-        VOICE_COMMUNICATION(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION", false),
-        VOICE_RECOGNITION(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION", false),
-        MIC(MediaRecorder.AudioSource.MIC, "MIC", false)
+        VOICE_RECOGNITION(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
+        MIC(MediaRecorder.AudioSource.MIC, "MIC")
     }
 
     private var audioRecord: AudioRecord? = null
@@ -71,7 +68,6 @@ class AudioRecorderManager(private val context: Context) {
     fun startRecording(
         scope: CoroutineScope,
         preferVoiceRecognition: Boolean = false,
-        preferCallCapture: Boolean = false,
         onMaxLimitReached: () -> Unit = {}
     ) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -93,8 +89,7 @@ class AudioRecorderManager(private val context: Context) {
         val bufferSize = maxOf(minBufferSize * 2, 4096)
         val (recorder, chosenSource) = createBestAudioRecord(
             bufferSize = bufferSize,
-            preferVoiceRecognition = preferVoiceRecognition,
-            preferCallCapture = preferCallCapture
+            preferVoiceRecognition = preferVoiceRecognition
         ) ?: throw IllegalStateException("Failed to initialize microphone AudioRecord.")
 
         _activeCaptureSource.value = chosenSource
@@ -138,28 +133,12 @@ class AudioRecorderManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     private fun createBestAudioRecord(
         bufferSize: Int,
-        preferVoiceRecognition: Boolean,
-        preferCallCapture: Boolean
+        preferVoiceRecognition: Boolean
     ): Pair<AudioRecord, CaptureSource>? {
-        val sources = when {
-            preferCallCapture -> {
-                if (PermissionHelper.hasCaptureAudioOutputPermission(context)) {
-                    listOf(
-                        CaptureSource.VOICE_CALL,
-                        CaptureSource.VOICE_COMMUNICATION,
-                        CaptureSource.VOICE_RECOGNITION,
-                        CaptureSource.MIC
-                    )
-                } else {
-                    listOf(
-                        CaptureSource.VOICE_COMMUNICATION,
-                        CaptureSource.VOICE_RECOGNITION,
-                        CaptureSource.MIC
-                    )
-                }
-            }
-            preferVoiceRecognition -> listOf(CaptureSource.VOICE_RECOGNITION, CaptureSource.MIC)
-            else -> listOf(CaptureSource.MIC)
+        val sources = if (preferVoiceRecognition) {
+            listOf(CaptureSource.VOICE_RECOGNITION, CaptureSource.MIC)
+        } else {
+            listOf(CaptureSource.MIC)
         }
         for (source in sources) {
             val candidate = runCatching {
