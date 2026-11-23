@@ -313,9 +313,14 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val allCallRecordings: StateFlow<List<CallRecording>> = callRecordingRepository.allRecordings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val callRecordingCapability: StateFlow<CallRecordingCapability> = MutableStateFlow(
+    private val _callRecordingCapability = MutableStateFlow(
         callRecordingRepository.getCapability()
-    ).asStateFlow()
+    )
+    val callRecordingCapability: StateFlow<CallRecordingCapability> = _callRecordingCapability.asStateFlow()
+
+    fun refreshRecordingCapability(sdkInt: Int = android.os.Build.VERSION.SDK_INT) {
+        _callRecordingCapability.value = callRecordingRepository.getCapability(sdkInt)
+    }
 
     val recordingPlaybackState: StateFlow<RecordingPlaybackState> = callRecordingPlayer.playbackState
 

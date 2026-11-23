@@ -35,8 +35,63 @@ object CallRecordingCoordinator {
     private val _currentDurationSeconds = MutableStateFlow(0L)
     val currentDurationSeconds: StateFlow<Long> = _currentDurationSeconds.asStateFlow()
 
+    val elapsedSeconds: StateFlow<Long> = _currentDurationSeconds
+
     private val _activeFileName = MutableStateFlow<String?>(null)
     val activeFileName: StateFlow<String?> = _activeFileName.asStateFlow()
+
+    fun bindApplicationContext(context: Context) {
+        // no-op initialization helper for test compatibility
+    }
+
+    suspend fun persistWavBytesAsRecording(
+        context: Context,
+        callerName: String,
+        callerNumber: String,
+        pcmBytes: ByteArray
+    ): CallRecording? = withContext(Dispatchers.IO) {
+        if (pcmBytes.isEmpty()) return@withContext null
+        val fileName = CallRecordingStorage.generateFileName(callerName, callerNumber)
+        val target = CallRecordingStorage.createRecordingTarget(context, fileName, callerName, callerNumber)
+        val totalDataLen = pcmBytes.size + 36
+        try {
+            val out = target.outputStream ?: return@withContext null
+            out.use { fos ->
+                CallRecordingStorage.writeWavHeader(
+                    out = fos,
+                    totalAudioLen = pcmBytes.size.toLong(),
+                    totalDataLen = totalDataLen.toLong(),
+                    longSampleRate = 44100,
+                    channels = 1,
+                    byteRate = 44100 * 2 * 1
+                )
+                fos.write(pcmBytes)
+                fos.flush()
+            }
+            if (target.isPendingSupported) {
+                CallRecordingStorage.finishPendingRecording(context, target.uri)
+            }
+        } catch (_: Exception) {
+            return@withContext null
+        }
+
+        val durationSec = (pcmBytes.size.toLong() / (44100L * 2L * 1L)).coerceAtLeast(1L)
+        val recording = CallRecording(
+            callerName = callerName.ifBlank { "Unknown" },
+            callerNumber = callerNumber.ifBlank { "Unknown" },
+            fileName = fileName,
+            mediaStoreUri = target.uri.toString(),
+            relativePath = target.relativePath,
+            durationSeconds = durationSec,
+            fileSizeBytes = pcmBytes.size.toLong() + 44L,
+            timestamp = System.currentTimeMillis(),
+            captureSource = "MIC",
+            isTwoWayAudio = false
+        )
+
+        val id = LyraDatabase.getDatabase(context).callRecordingDao().insertRecording(recording)
+        recording.copy(id = id)
+    }
 
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null

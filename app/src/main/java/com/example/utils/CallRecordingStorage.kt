@@ -17,6 +17,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class CallRecordingSupportMode {
+    MICROPHONE_ONLY,
+    TWO_WAY_CALL,
+    RESTRICTED,
+    UNSUPPORTED
+}
+
 data class RecordingTarget(
     val uri: Uri,
     val relativePath: String,
@@ -28,6 +35,16 @@ object CallRecordingStorage {
 
     private const val DIRECTORY_NAME = "Lyra/Recordings"
     private const val RELATIVE_PATH = "Recordings/Lyra"
+
+    fun buildRecordingFileName(callerName: String?, callerNumber: String?): String = generateFileName(callerName, callerNumber)
+
+    fun detectRecordingCapability(sdkInt: Int = Build.VERSION.SDK_INT): CallRecordingSupportMode {
+        return when {
+            sdkInt >= 35 -> CallRecordingSupportMode.RESTRICTED
+            sdkInt >= 29 -> CallRecordingSupportMode.MICROPHONE_ONLY
+            else -> CallRecordingSupportMode.MICROPHONE_ONLY
+        }
+    }
 
     /**
      * Generates a filename adhering strictly to:
