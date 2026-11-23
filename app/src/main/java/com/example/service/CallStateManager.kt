@@ -407,10 +407,12 @@ object CallStateManager {
     fun toggleSpeaker() {
         val newValue = !_isSpeakerOn.value
         _isSpeakerOn.value = newValue
-        _currentAudioRoute.value = if (newValue) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE
+        val targetRoute = if (newValue) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE
+        _currentAudioRoute.value = targetRoute
         val bridge = telecomBridge
         if (bridge != null) {
             bridge.setSpeaker(newValue)
+            bridge.setAudioRouteMode(targetRoute)
         } else {
             val am = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             runCatching { am?.isSpeakerphoneOn = newValue }

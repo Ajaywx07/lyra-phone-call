@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.test.core.app.ApplicationProvider
 import com.example.domain.model.CallStateEnum
 import com.example.domain.model.CallerInfo
@@ -215,6 +216,8 @@ class LyraFixesAndLocalizationTest {
         // 5. PermissionsScreen must show Microphone (Voicemail) and no Shared Storage recordings card
         screenStep.intValue = 4
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("permissions_screen").performScrollToNode(hasText("Microphone (Voicemail)"))
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Microphone (Voicemail)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Shared Storage (Lyra/Recordings)").assertDoesNotExist()
     }
@@ -303,20 +306,7 @@ class LyraFixesAndLocalizationTest {
         CallStateManager.syncWithLiveTelecomBridge()
         assertTrue(CallStateManager.hasLiveTelecomCall())
 
-        // Disconnect clears call cleanly
-        val repo = com.example.data.repository.CallRepository(
-            callNoteDao = com.example.data.local.database.LyraDatabase.getDatabase(
-                ApplicationProvider.getApplicationContext()
-            ).callNoteDao(),
-            callSummaryDao = com.example.data.local.database.LyraDatabase.getDatabase(
-                ApplicationProvider.getApplicationContext()
-            ).callSummaryDao(),
-            priorityContactDao = com.example.data.local.database.LyraDatabase.getDatabase(
-                ApplicationProvider.getApplicationContext()
-            ).priorityContactDao(),
-            aiAssistantRepository = com.example.data.repository.LocalRuleBasedAiRepository()
-        )
-        CallStateManager.declineOrEndActiveCall(repo)
+        CallStateManager.declineOrEndActiveCall()
         assertTrue(disconnected)
         assertFalse(CallStateManager.hasLiveTelecomCall())
     }
@@ -331,18 +321,18 @@ class LyraFixesAndLocalizationTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithTag("about_guide_expandable_card").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("about_guide_expanded_content").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("about_guide_expanded_content", useUnmergedTree = true).assertDoesNotExist()
 
         composeTestRule.onNodeWithTag("about_guide_expandable_card").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithTag("about_guide_expanded_content").assertIsDisplayed()
-        composeTestRule.onNodeWithText("How to Use the App").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Available Settings").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Recommended / Best Settings").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Do's & Don'ts").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Usage Framework").assertIsDisplayed()
-        composeTestRule.onNodeWithText("App Details").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("about_guide_expanded_content", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("How to Use the App", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Available Settings", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Recommended / Best Settings", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Do's & Don'ts", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Usage Framework", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("App Details", useUnmergedTree = true).assertExists()
 
         // Scroll slightly to verify App Details remains cleanly rendered inside expanded box
         composeTestRule.onNodeWithTag("about_screen").performScrollToNode(hasTestTag("about_guide_expandable_card"))

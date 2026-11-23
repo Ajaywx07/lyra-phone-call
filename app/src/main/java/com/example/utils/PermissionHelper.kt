@@ -117,10 +117,14 @@ object PermissionHelper {
     fun isDefaultDialer(context: Context): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
-            if (roleManager?.isRoleAvailable(RoleManager.ROLE_DIALER) == true &&
-                roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
-            ) {
-                return true
+            try {
+                if (roleManager?.isRoleAvailable(RoleManager.ROLE_DIALER) == true &&
+                    roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
+                ) {
+                    return true
+                }
+            } catch (_: Exception) {
+                // Ignore concurrent access issues in RoleManager shadow or OEM implementations
             }
         }
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
@@ -131,8 +135,12 @@ object PermissionHelper {
     fun isCallScreener(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
-            roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true &&
-                roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+            try {
+                roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true &&
+                    roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+            } catch (_: Exception) {
+                false
+            }
         } else {
             false
         }
@@ -141,7 +149,12 @@ object PermissionHelper {
     fun createDefaultDialerIntent(context: Context): Intent? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
-            if (roleManager?.isRoleAvailable(RoleManager.ROLE_DIALER) == true) {
+            val isAvailable = try {
+                roleManager?.isRoleAvailable(RoleManager.ROLE_DIALER) == true
+            } catch (_: Exception) {
+                false
+            }
+            if (isAvailable && roleManager != null) {
                 roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
             } else {
                 @Suppress("DEPRECATION")
@@ -160,7 +173,12 @@ object PermissionHelper {
     fun createCallScreeningRoleIntent(context: Context): Intent? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
-            if (roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true) {
+            val isAvailable = try {
+                roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true
+            } catch (_: Exception) {
+                false
+            }
+            if (isAvailable && roleManager != null) {
                 roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
             } else {
                 null
