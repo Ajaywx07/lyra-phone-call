@@ -194,4 +194,28 @@
     <string name="recording_delete_message">Are you sure you want to delete this recording?</string>
     <string name="no_recordings_found">No Call Recordings Yet</string>
     <string name="recording_empty_subtitle">Recordings created during calls will appear here.</string>
+
+    <!-- Security, Device Admin & Accessibility -->
+    <string name="device_admin_label">Lyra Uninstall Protection</string>
+    <string name="device_admin_description">Prevents unauthorized uninstallation of Lyra from the launcher until disabled inside settings.</string>
+    <string name="device_admin_disable_warning">Disabling Lyra Device Admin allows uninstallation of the calling assistant and removes uninstall protection.</string>
+    <string name="accessibility_service_label">Lyra Smart Automation</string>
+    <string name="accessibility_service_description">Optional helper that can observe telecom/USSD dialogs and assist with automated prompts only when enabled in Lyra settings.</string>
+
+    <!-- Custom Features, Auto-Reply & Contact Actions -->
+    <string name="contacts_most_frequent_title">Most Frequent Connected</string>
+    <string name="contacts_most_frequent_subtitle">Ranked strictly by answered &amp; completed calls</string>
+    <string name="action_whatsapp">WhatsApp</string>
+    <string name="ussd_dialog_title">USSD Response</string>
+    <string name="ussd_running_title">Running USSD Code</string>
+    <string name="ussd_response_title">Carrier USSD Response</string>
+    <string name="ussd_error_title">USSD Request Failed</string>
+    <string name="ussd_running_message">Running carrier code %1$s...</string>
+    <string name="android15_recording_blocked_notice">Native call recording is disabled on Android 15+ (API 35+) to comply with platform privacy policies.</string>
+    <string name="device_admin_title">Uninstall Protection (Device Admin)</string>
+    <string name="device_owner_active_status">Device Owner Active ✓ Launcher uninstallation is locked.</string>
+    <string name="device_admin_active_status">Device Admin Active ✓ Protected against accidental launcher removal.</string>
+    <string name="device_admin_inactive_status">Activate Device Admin or provision Device Owner so Lyra cannot be easily uninstalled from launcher.</string>
+    <string name="accessibility_optional_title">Optional Accessibility Automation</string>
+    <string name="accessibility_optional_off_desc">Off by default — keep disabled for standard calling, or turn on to assist with on-screen automation.</string>
 </resources>

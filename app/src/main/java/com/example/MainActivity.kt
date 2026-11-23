@@ -186,7 +186,6 @@ class MainActivity : ComponentActivity() {
                     !isLockedOrScreenOff &&
                     !isFullScreenIncomingUiVisible &&
                     currentRoute != LyraDestinations.INCOMING_CALL &&
-                    currentRoute != LyraDestinations.ACTIVE_CALL &&
                     currentRoute != LyraDestinations.VOICEMAIL
 
                 Surface(

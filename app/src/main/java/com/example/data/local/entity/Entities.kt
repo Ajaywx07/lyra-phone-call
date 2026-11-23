@@ -109,3 +109,37 @@ data class CallRecording(
     val captureSource: String = "MIC",
     val isTwoWayAudio: Boolean = false
 )
+
+/**
+ * Permanent Room entity representing an auto-reply status mode (e.g. Driving, Sleeping, Meeting).
+ * Seeded with 24 pre-fed modes; user edits to customMessage and active status persist permanently across restarts.
+ */
+@Entity(tableName = "auto_reply_modes")
+data class AutoReplyMode(
+    @PrimaryKey
+    val modeId: String,
+    val title: String,
+    val emoji: String,
+    val defaultMessage: String,
+    val customMessage: String,
+    val isActive: Boolean = false,
+    val sortOrder: Int = 0,
+    val updatedAtMillis: Long = System.currentTimeMillis()
+)
+
+/**
+ * Permanent singleton Room entity backing custom UI, automation, and security feature settings.
+ */
+@Entity(tableName = "custom_feature_settings")
+data class CustomFeatureSettings(
+    @PrimaryKey
+    val id: Int = 1,
+    val showLyraLogoOnIncoming: Boolean = true,
+    val accessibilityAutomationEnabled: Boolean = false,
+    val ussdDirectHandlerEnabled: Boolean = true,
+    val showMostFrequentContacts: Boolean = true,
+    val autoReplyMasterEnabled: Boolean = false,
+    val activeAutoReplyModeId: String = "",
+    val updatedAtMillis: Long = System.currentTimeMillis()
+)
+

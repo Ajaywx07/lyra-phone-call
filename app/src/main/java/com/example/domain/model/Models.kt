@@ -120,7 +120,11 @@ data class IncomingCallSettingsSnapshot(
     val showContactPhotoOnCall: Boolean = true,
     val blockUnknownCalls: Boolean = false,
     val blockCommercialPrefixes: Boolean = false,
-    val themeMode: String = "IOS_GLASS"
+    val themeMode: String = "IOS_GLASS",
+    val showLyraLogoOnIncoming: Boolean = true,
+    val accessibilityAutomationEnabled: Boolean = false,
+    val hasActiveAutoReplyMode: Boolean = false,
+    val activeAutoReplyModeId: String = ""
 )
 
 data class ContactItemData(
@@ -134,3 +138,22 @@ data class ContactItemData(
     val isOwner: Boolean = false,
     val isDemoData: Boolean = false
 )
+
+data class FrequentContactItem(
+    val phoneNumber: String,
+    val normalizedNumber: String,
+    val displayName: String,
+    val photoUri: String? = null,
+    val connectedCallCount: Int,
+    val totalDurationSeconds: Long,
+    val lastConnectedTimestamp: Long,
+    val isPriority: Boolean = false,
+    val isOwner: Boolean = false
+)
+
+sealed class UssdUiState {
+    data object Idle : UssdUiState()
+    data class Loading(val ussdCode: String, val simLabel: String) : UssdUiState()
+    data class Success(val ussdCode: String, val responseMessage: String, val simLabel: String) : UssdUiState()
+    data class Error(val ussdCode: String, val errorMessage: String, val simLabel: String) : UssdUiState()
+}

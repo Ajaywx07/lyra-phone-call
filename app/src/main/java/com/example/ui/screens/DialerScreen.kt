@@ -54,6 +54,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -108,6 +109,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.domain.model.CallHistoryItemData
 import com.example.domain.model.ContactItemData
+import com.example.domain.model.UssdUiState
 import com.example.navigation.LyraDestinations
 import com.example.ui.components.CapsuleStatusChip
 import com.example.ui.components.GreenCallActionCapsule
@@ -425,6 +427,7 @@ fun DialerScreen(
     val preferredSim by viewModel.preferredSim.collectAsStateWithLifecycle()
     val fixDefaultSim by viewModel.fixDefaultSim.collectAsStateWithLifecycle()
     val unreadMissedCount by viewModel.unreadMissedCallCount.collectAsStateWithLifecycle()
+    val ussdState by viewModel.ussdState.collectAsStateWithLifecycle()
 
     val initiateDialCall: (String) -> Unit = { targetNumber ->
         if (targetNumber.isNotBlank()) {
@@ -556,7 +559,7 @@ fun DialerScreen(
                 val slotCount = ((exposedHeight + slotGap) / 68.dp).roundToInt().coerceAtLeast(2)
                 val dynamicCardHeight =
                     ((exposedHeight - slotGap * (slotCount - 1)) / (slotCount - 0.27f))
-                        .coerceIn(54.dp, 68.dp)
+                        .coerceIn(56.dp, 68.dp)
                 val upperSuggestions = matchingSuggestions.take(slotCount)
                 val continuationSuggestions = matchingSuggestions.drop(slotCount).take(6)
                 val fillsUpperToLip = upperSuggestions.size == slotCount && upperSuggestions.size >= 2
@@ -1279,6 +1282,138 @@ fun DialerScreen(
             shape = RoundedCornerShape(24.dp)
         )
     }
+
+    if (ussdState !is UssdUiState.Idle) {
+        UssdResultDialog(
+            state = ussdState,
+            onRetry = { code -> viewModel.executeUssdCode(code, preferredSim) },
+            onDismiss = { viewModel.clearUssdState() }
+        )
+    }
+}
+
+@Composable
+private fun UssdResultDialog(
+    state: UssdUiState,
+    onRetry: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LyraTheme.colors
+    val (code, simLabel) = when (state) {
+        is UssdUiState.Loading -> state.ussdCode to state.simLabel
+        is UssdUiState.Success -> state.ussdCode to state.simLabel
+        is UssdUiState.Error -> state.ussdCode to state.simLabel
+        UssdUiState.Idle -> "" to ""
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("ussd_result_dialog"),
+        title = {
+            Column {
+                Text(
+                    text = when (state) {
+                        is UssdUiState.Loading -> stringResource(R.string.ussd_running_title)
+                        is UssdUiState.Success -> stringResource(R.string.ussd_response_title)
+                        is UssdUiState.Error -> stringResource(R.string.ussd_error_title)
+                        UssdUiState.Idle -> ""
+                    },
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                if (code.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "$code • $simLabel",
+                        color = colors.primaryGlow,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        },
+        text = {
+            when (state) {
+                is UssdUiState.Loading -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = colors.primary,
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.5.dp
+                        )
+                        Text(
+                            text = "Sending carrier USSD request...",
+                            color = colors.textSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                is UssdUiState.Success -> {
+                    Surface(
+                        color = colors.surface,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, colors.glassBorder)
+                    ) {
+                        Text(
+                            text = state.responseMessage,
+                            color = colors.textPrimary,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        )
+                    }
+                }
+                is UssdUiState.Error -> {
+                    Text(
+                        text = state.errorMessage,
+                        color = colors.declineColor,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+                UssdUiState.Idle -> Unit
+            }
+        },
+        confirmButton = {
+            if (state is UssdUiState.Error && code.isNotBlank()) {
+                Button(
+                    onClick = { onRetry(code) },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                    shape = CircleShape,
+                    modifier = Modifier.testTag("ussd_retry_btn")
+                ) {
+                    Text("Retry", color = colors.onPrimaryButton, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                    shape = CircleShape,
+                    modifier = Modifier.testTag("ussd_close_btn")
+                ) {
+                    Text("Close", color = colors.onPrimaryButton, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            if (state is UssdUiState.Error) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("ussd_close_btn")
+                ) {
+                    Text("Close", color = colors.textSecondary)
+                }
+            }
+        },
+        containerColor = colors.surfaceElevated,
+        shape = RoundedCornerShape(24.dp)
+    )
 }
 
 @Composable
@@ -1294,7 +1429,7 @@ private fun TopDialerSuggestionCard(
     val colors = LyraTheme.colors
     Surface(
         onClick = onFillNumber,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         color = colors.glassSurface,
         border = BorderStroke(
             1.dp,
@@ -1309,7 +1444,7 @@ private fun TopDialerSuggestionCard(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1322,7 +1457,7 @@ private fun TopDialerSuggestionCard(
                     photoUri = suggestion.photoUri,
                     isOwner = suggestion.isOwner,
                     isPriority = suggestion.isPriority,
-                    size = 38.dp
+                    size = 42.dp
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -1395,7 +1530,7 @@ private fun ExpandedSuggestionRow(
     val colors = LyraTheme.colors
     Surface(
         onClick = onSelect,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         color = colors.glassSurface,
         border = BorderStroke(
             1.dp,
@@ -1407,12 +1542,13 @@ private fun ExpandedSuggestionRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 64.dp)
             .testTag("dialer_expanded_item_${suggestion.id}")
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1427,14 +1563,14 @@ private fun ExpandedSuggestionRow(
                     photoUri = suggestion.photoUri,
                     isOwner = suggestion.isOwner,
                     isPriority = suggestion.isPriority,
-                    size = 44.dp,
+                    size = 42.dp,
                     modifier = if (onAvatarClick != null) {
                         Modifier.clickable(onClick = onAvatarClick)
                     } else {
                         Modifier
                     }
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1455,17 +1591,11 @@ private fun ExpandedSuggestionRow(
                             CapsuleStatusChip(text = "★ VIP", color = AmberPriority)
                         }
                     }
+                    Spacer(modifier = Modifier.height(1.dp))
                     Text(
-                        text = suggestion.phoneNumber,
+                        text = "${suggestion.phoneNumber} • ${suggestion.subtitle}",
                         color = colors.primaryGlow,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = suggestion.subtitle,
-                        color = colors.textMuted,
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

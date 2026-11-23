@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
@@ -37,6 +39,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -52,13 +55,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.domain.model.ContactItemData
+import com.example.domain.model.FrequentContactItem
 import com.example.navigation.LyraDestinations
+import com.example.ui.components.LyraContactAvatar
 import com.example.ui.components.BadgeType
 import com.example.ui.components.CapsuleButton
 import com.example.ui.components.CapsuleFilterBar
@@ -104,6 +110,8 @@ fun ContactsScreen(
     val preferredSim by mainViewModel.preferredSim.collectAsStateWithLifecycle()
     val fixDefaultSim by mainViewModel.fixDefaultSim.collectAsStateWithLifecycle()
     val unreadMissedCount by mainViewModel.unreadMissedCallCount.collectAsStateWithLifecycle()
+    val mostFrequentContacts by mainViewModel.mostFrequentContacts.collectAsStateWithLifecycle()
+    val showMostFrequentContacts by mainViewModel.showMostFrequentContacts.collectAsStateWithLifecycle()
 
     var showCallerIdTester by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -429,6 +437,48 @@ fun ContactsScreen(
                 }
 
                 is ContactsUiState.Success -> {
+                    if (showMostFrequentContacts &&
+                        mostFrequentContacts.isNotEmpty() &&
+                        searchQuery.isBlank() &&
+                        selectedFilter == ContactFilter.ALL
+                    ) {
+                        item(key = "most_frequent_header") {
+                            SectionHeader(title = stringResource(R.string.contacts_most_frequent_title))
+                        }
+                        item(key = "most_frequent_row") {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(vertical = 2.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("most_frequent_contacts_section")
+                            ) {
+                                items(mostFrequentContacts, key = { it.normalizedNumber }) { freq ->
+                                    MostFrequentContactChipCard(
+                                        item = freq,
+                                        onCardClick = {
+                                            val matched = (state.priorityContacts + state.regularContacts).firstOrNull {
+                                                it.phoneNumber == freq.phoneNumber ||
+                                                    it.name.equals(freq.displayName, ignoreCase = true)
+                                            } ?: ContactItemData(
+                                                id = "freq_${freq.normalizedNumber}",
+                                                name = freq.displayName,
+                                                phoneNumber = freq.phoneNumber,
+                                                photoUri = freq.photoUri,
+                                                label = "Frequent",
+                                                isPriority = freq.isPriority,
+                                                isOwner = freq.isOwner
+                                            )
+                                            mainViewModel.selectContact(matched)
+                                            onContactClick(matched)
+                                        },
+                                        onCallClick = { startCallWithSimCheck(freq.phoneNumber) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (state.priorityContacts.isNotEmpty()) {
                         item {
                             SectionHeader(title = "★ Priority & Owner (${state.priorityContacts.size})")
@@ -649,3 +699,80 @@ fun ContactsScreen(
         )
     }
 }
+
+@Composable
+private fun MostFrequentContactChipCard(
+    item: FrequentContactItem,
+    onCardClick: () -> Unit,
+    onCallClick: () -> Unit
+) {
+    val colors = LyraTheme.colors
+    Surface(
+        onClick = onCardClick,
+        shape = RoundedCornerShape(20.dp),
+        color = colors.glassSurface,
+        border = BorderStroke(
+            1.dp,
+            if (item.isOwner) colors.primary.copy(alpha = 0.5f)
+            else if (item.isPriority) AmberPriority.copy(alpha = 0.45f)
+            else colors.glassBorder
+        ),
+        modifier = Modifier
+            .width(196.dp)
+            .testTag("frequent_contact_card_${item.normalizedNumber}")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).padding(end = 6.dp)
+            ) {
+                LyraContactAvatar(
+                    name = item.displayName,
+                    photoUri = item.photoUri,
+                    isOwner = item.isOwner,
+                    isPriority = item.isPriority,
+                    size = 40.dp
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.displayName,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${item.connectedCallCount} connected",
+                        color = colors.primaryGlow,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            IconButton(
+                onClick = onCallClick,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("frequent_call_btn_${item.normalizedNumber}")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Call,
+                    contentDescription = "Call ${item.displayName}",
+                    tint = colors.acceptColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+

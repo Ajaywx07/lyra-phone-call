@@ -16,16 +16,20 @@ import android.telecom.TelecomManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.database.LyraDatabase
+import com.example.data.local.entity.AutoReplyMode
 import com.example.data.local.entity.CallNote
 import com.example.data.local.entity.CallRecording
 import com.example.data.local.entity.CallSummary
+import com.example.data.local.entity.CustomFeatureSettings
 import com.example.data.local.entity.ScheduledCall
 import com.example.data.local.entity.VoicemailEntry
 import com.example.data.local.preferences.LyraPreferences
+import com.example.data.repository.AutoReplyRepository
 import com.example.data.repository.CallRecordingRepository
 import com.example.domain.model.CallRecordingCapability
 import com.example.domain.model.RecordingPlaybackState
 import com.example.service.CallRecordingCoordinator
+import com.example.service.LyraAccessibilityService
 import com.example.utils.CallRecordingPlayer
 import com.example.service.ScheduledCallScheduler
 import com.example.data.remote.CloudContactBackup
@@ -44,15 +48,19 @@ import com.example.domain.model.CallStateEnum
 import com.example.domain.model.CallTypeEnum
 import com.example.domain.model.CallerInfo
 import com.example.domain.model.ContactItemData
+import com.example.domain.model.FrequentContactItem
 import com.example.domain.model.UnreadMissedCall
+import com.example.domain.model.UssdUiState
 import com.example.domain.model.VoicemailPhase
 import com.example.service.CallStateManager
+import com.example.service.CallParticipant
 import com.example.service.NotificationHelper
 import com.example.service.QuickSmsDispatcher
 import com.example.service.QuickSmsService
 import com.example.service.SmsDispatchHelper
 import com.example.ui.theme.AppThemeStyle
 import com.example.utils.AudioRecorderManager
+import com.example.utils.ExternalIntentHelper
 import com.example.utils.GitHubReleaseInfo
 import com.example.utils.GitHubUpdateManager
 import com.example.utils.GoogleAuthHelper
@@ -124,8 +132,92 @@ data class PermissionsState(
     val batteryOptimizationIgnored: Boolean = false,
     val sendSmsAllowed: Boolean = false,
     val isDefaultDialer: Boolean = false,
-    val isCallScreener: Boolean = false
+    val isCallScreener: Boolean = false,
+    val deviceAdminActive: Boolean = false,
+    val deviceOwnerActive: Boolean = false,
+    val accessibilityEnabled: Boolean = false
 )
+
+internal fun computeMostFrequentContacts(
+    callLogs: List<CallHistoryItemData>,
+    contacts: List<ContactItemData>,
+    limit: Int = 10
+): List<FrequentContactItem> {
+    if (callLogs.isEmpty()) return emptyList()
+    val contactsByNormalized = contacts.associateBy {
+        PhoneNumberUtils.normalize(it.phoneNumber).ifBlank { it.phoneNumber.trim() }
+    }
+    data class Acc(
+        val rawNumber: String,
+        val normalizedNumber: String,
+        var count: Int = 0,
+        var totalDuration: Long = 0L,
+        var lastTimestamp: Long = 0L,
+        var fallbackName: String? = null,
+        var photoUri: String? = null,
+        var isPriority: Boolean = false,
+        var isOwner: Boolean = false
+    )
+    val grouped = LinkedHashMap<String, Acc>()
+    for (entry in callLogs) {
+        val isConnectedType = entry.callType == CallTypeEnum.INCOMING || entry.callType == CallTypeEnum.OUTGOING
+        if (!isConnectedType || entry.durationSeconds <= 0L) continue
+
+        val key = PhoneNumberUtils.normalize(entry.phoneNumber).ifBlank { entry.phoneNumber.trim() }
+        if (key.isBlank()) continue
+
+        val current = grouped[key] ?: Acc(
+            rawNumber = entry.phoneNumber,
+            normalizedNumber = key,
+            fallbackName = entry.contactName?.takeIf { it.isNotBlank() && it != "Unknown Caller" },
+            photoUri = entry.photoUri,
+            isPriority = entry.isPriority,
+            isOwner = entry.isOwner
+        ).also { grouped[key] = it }
+
+        current.count += 1
+        current.totalDuration += entry.durationSeconds
+        if (entry.timestamp > current.lastTimestamp) {
+            current.lastTimestamp = entry.timestamp
+        }
+        if (current.fallbackName.isNullOrBlank() &&
+            !entry.contactName.isNullOrBlank() &&
+            entry.contactName != "Unknown Caller"
+        ) {
+            current.fallbackName = entry.contactName
+        }
+        if (current.photoUri.isNullOrBlank() && !entry.photoUri.isNullOrBlank()) {
+            current.photoUri = entry.photoUri
+        }
+        if (entry.isPriority) current.isPriority = true
+        if (entry.isOwner) current.isOwner = true
+    }
+
+    return grouped.values
+        .sortedWith(
+            compareByDescending<Acc> { it.count }
+                .thenByDescending { it.totalDuration }
+                .thenByDescending { it.lastTimestamp }
+        )
+        .take(limit)
+        .map { acc ->
+            val matched = contactsByNormalized[acc.normalizedNumber]
+            val formattedFallback = PhoneNumberUtils.formatDisplay(acc.rawNumber).ifBlank { acc.rawNumber }
+            FrequentContactItem(
+                phoneNumber = matched?.phoneNumber ?: acc.rawNumber,
+                normalizedNumber = acc.normalizedNumber,
+                displayName = matched?.name?.takeIf { it.isNotBlank() }
+                    ?: acc.fallbackName
+                    ?: formattedFallback,
+                photoUri = matched?.photoUri ?: acc.photoUri,
+                connectedCallCount = acc.count,
+                totalDurationSeconds = acc.totalDuration,
+                lastConnectedTimestamp = acc.lastTimestamp,
+                isPriority = matched?.isPriority ?: acc.isPriority,
+                isOwner = matched?.isOwner ?: acc.isOwner
+            )
+        }
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LyraMainViewModel(application: Application) : AndroidViewModel(application) {
@@ -165,6 +257,10 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         aiRepository
     )
     val callRecordingRepository = CallRecordingRepository(database.callRecordingDao())
+    val autoReplyRepository = AutoReplyRepository(
+        database.autoReplyModeDao(),
+        database.customFeatureSettingsDao()
+    )
     private val callRecordingPlayer = CallRecordingPlayer(viewModelScope)
 
     val allCallRecordings: StateFlow<List<CallRecording>> = callRecordingRepository.allRecordings
@@ -178,6 +274,48 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
 
     private val _recordingActionMessage = MutableStateFlow<String?>(null)
     val recordingActionMessage: StateFlow<String?> = _recordingActionMessage.asStateFlow()
+
+    // Permanent SQLite-backed Auto-Reply Modes (24 pre-fed modes) & Custom Feature Settings
+    val autoReplyModes: StateFlow<List<AutoReplyMode>> = autoReplyRepository.allModes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val customFeatureSettings: StateFlow<CustomFeatureSettings> = autoReplyRepository.customFeatureSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CustomFeatureSettings())
+
+    val showLyraLogoOnIncoming: StateFlow<Boolean> = customFeatureSettings
+        .map { it.showLyraLogoOnIncoming }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val accessibilityAutomationEnabled: StateFlow<Boolean> = customFeatureSettings
+        .map { it.accessibilityAutomationEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val ussdDirectHandlerEnabled: StateFlow<Boolean> = customFeatureSettings
+        .map { it.ussdDirectHandlerEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val showMostFrequentContacts: StateFlow<Boolean> = customFeatureSettings
+        .map { it.showMostFrequentContacts }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val autoReplyMasterEnabled: StateFlow<Boolean> = customFeatureSettings
+        .map { it.autoReplyMasterEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val activeAutoReplyMode: StateFlow<AutoReplyMode?> = combine(
+        autoReplyModes,
+        customFeatureSettings
+    ) { modes, settings ->
+        if (!settings.autoReplyMasterEnabled) null
+        else modes.firstOrNull { it.modeId == settings.activeAutoReplyModeId }
+            ?: modes.firstOrNull { it.isActive }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val accessibilityServiceConnected: StateFlow<Boolean> = LyraAccessibilityService.isServiceConnected
+    val accessibilityAutomationStatus: StateFlow<String?> = LyraAccessibilityService.lastAutomationStatus
+
+    private val _ussdState = MutableStateFlow<UssdUiState>(UssdUiState.Idle)
+    val ussdState: StateFlow<UssdUiState> = _ussdState.asStateFlow()
 
     private val isFirebaseInitialized: Boolean
         get() = ensureFirebaseInitialized(context)
@@ -207,6 +345,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val conferenceParticipantCount: StateFlow<Int> = CallStateManager.conferenceParticipantCount
     val canMergeConference: StateFlow<Boolean> = CallStateManager.canMergeConference
     val isConferenceMerged: StateFlow<Boolean> = CallStateManager.isConferenceMerged
+    val conferenceParticipants: StateFlow<List<CallParticipant>> = CallStateManager.conferenceParticipants
     val callStatusBanner: StateFlow<String?> = CallStateManager.callStatusBanner
     val currentCallNotes: StateFlow<String> = CallStateManager.currentCallNotes
     val lastSummary: StateFlow<CallSummary?> = CallStateManager.lastSummary
@@ -259,6 +398,14 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     // Call History
     private val _callLog = MutableStateFlow<List<CallHistoryItemData>>(emptyList())
     val callLog: StateFlow<List<CallHistoryItemData>> = _callLog.asStateFlow()
+
+    val mostFrequentContacts: StateFlow<List<FrequentContactItem>> = combine(
+        _callLog,
+        _contacts,
+        showMostFrequentContacts
+    ) { logs, contactsList, enabled ->
+        if (!enabled) emptyList() else computeMostFrequentContacts(logs, contactsList, limit = 10)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _callLogFilter = MutableStateFlow<CallTypeEnum?>(null)
     val callLogFilter: StateFlow<CallTypeEnum?> = _callLogFilter.asStateFlow()
@@ -532,6 +679,17 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             runCatching { ScheduledCallScheduler.rescheduleAllPending(context) }
         }
+        viewModelScope.launch {
+            runCatching {
+                autoReplyRepository.ensureSeeded()
+                val persisted = autoReplyRepository.getSettingsOnce()
+                preferences.setShowLyraLogoOnIncoming(persisted.showLyraLogoOnIncoming)
+                preferences.setAccessibilityAutomationEnabled(persisted.accessibilityAutomationEnabled)
+                preferences.setUssdDirectHandlerEnabled(persisted.ussdDirectHandlerEnabled)
+                preferences.setShowMostFrequentContacts(persisted.showMostFrequentContacts)
+                preferences.setAutoReplyState(persisted.autoReplyMasterEnabled, persisted.activeAutoReplyModeId)
+            }
+        }
     }
 
     fun checkForAppUpdatesIfStartupPending() {
@@ -663,8 +821,23 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
             batteryOptimizationIgnored = PermissionHelper.isIgnoringBatteryOptimizations(context),
             sendSmsAllowed = PermissionHelper.hasSendSmsPermission(context),
             isDefaultDialer = PermissionHelper.isDefaultDialer(context),
-            isCallScreener = PermissionHelper.isCallScreener(context)
+            isCallScreener = PermissionHelper.isCallScreener(context),
+            deviceAdminActive = PermissionHelper.isDeviceAdminActive(context),
+            deviceOwnerActive = PermissionHelper.isDeviceOwner(context),
+            accessibilityEnabled = PermissionHelper.isAccessibilityServiceEnabled(context)
         )
+    }
+
+    fun refreshPermissions() {
+        viewModelScope.launch {
+            _permissionsState.value = withContext(Dispatchers.IO) { checkPermissions() }
+        }
+    }
+
+    fun deactivateDeviceAdmin(): Boolean {
+        val removed = PermissionHelper.removeDeviceAdmin(context)
+        refreshPermissions()
+        return removed
     }
 
     fun setContactsSearchQuery(query: String) {
@@ -776,6 +949,8 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     fun silenceRinger() = CallStateManager.silenceRinger()
     fun selectAudioRoute(route: Int) = CallStateManager.selectAudioRoute(route)
     fun mergeConferenceCalls() = CallStateManager.mergeConferenceCalls()
+    fun disconnectParticipant(participantId: String) = CallStateManager.disconnectParticipant(participantId)
+    fun toggleHoldParticipant(participantId: String, hold: Boolean) = CallStateManager.toggleHoldParticipant(participantId, hold)
     fun clearCallStatusBanner() = CallStateManager.setCallStatusBanner(null)
     fun sendDtmf(digit: Char) = CallStateManager.sendDtmfTone(digit)
     fun updateInCallNote(note: String) = CallStateManager.updateNotes(note)
@@ -891,15 +1066,25 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         @Suppress("UNUSED_PARAMETER")
         onNavigateToOutgoingCall: () -> Unit = {}
     ) {
-        val cleanNumber = PhoneNumberUtils.normalize(phoneNumber)
-        if (cleanNumber.isBlank()) return
-
         val effectiveSim = when {
             fixDefaultSim.value && preferredSim.value != SimManager.SIM_ASK -> preferredSim.value
             simKeyOverride != null && simKeyOverride != SimManager.SIM_ASK -> simKeyOverride
             preferredSim.value != SimManager.SIM_ASK -> preferredSim.value
             else -> SimManager.SIM_ASK
         }
+
+        val trimmedRaw = phoneNumber.trim()
+        if (ExternalIntentHelper.isUssdCode(trimmedRaw)) {
+            if (ussdDirectHandlerEnabled.value) {
+                executeUssdCode(trimmedRaw, effectiveSim)
+            } else {
+                ExternalIntentHelper.dialUssdFallback(context, trimmedRaw)
+            }
+            return
+        }
+
+        val cleanNumber = PhoneNumberUtils.normalize(phoneNumber)
+        if (cleanNumber.isBlank()) return
 
         val handle = SimManager.resolveHandleForSimKey(context, effectiveSim)
 
@@ -933,6 +1118,35 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         runCatching { context.startActivity(dialIntent) }
+    }
+
+    fun executeUssdCode(ussdCode: String, simKey: String = preferredSim.value) {
+        val simLabel = SimManager.displayLabelForSimKey(context, simKey)
+            .let { if (it == "Ask Every Time") "Default SIM" else it }
+        _ussdState.value = UssdUiState.Loading(ussdCode = ussdCode, simLabel = simLabel)
+        ExternalIntentHelper.executeUssdRequest(
+            context = context,
+            ussdCode = ussdCode,
+            simSlotPreference = simKey
+        ) { result ->
+            result.onSuccess { msg ->
+                _ussdState.value = UssdUiState.Success(
+                    ussdCode = ussdCode,
+                    responseMessage = msg,
+                    simLabel = simLabel
+                )
+            }.onFailure { err ->
+                _ussdState.value = UssdUiState.Error(
+                    ussdCode = ussdCode,
+                    errorMessage = err.localizedMessage ?: "Failed to execute USSD code.",
+                    simLabel = simLabel
+                )
+            }
+        }
+    }
+
+    fun clearUssdState() {
+        _ussdState.value = UssdUiState.Idle
     }
 
     // Legacy compatibility method
@@ -1010,6 +1224,49 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     fun setFixDefaultSim(fixed: Boolean) = viewModelScope.launch { preferences.setFixDefaultSim(fixed) }
     fun setAppTheme(style: AppThemeStyle) = viewModelScope.launch { preferences.setThemeMode(style.key) }
     fun setAutoSendQuickSms(enabled: Boolean) = viewModelScope.launch { preferences.setAutoSendQuickSms(enabled) }
+
+    fun setShowLyraLogoOnIncoming(enabled: Boolean) = viewModelScope.launch {
+        autoReplyRepository.updateFeatureSettings { it.copy(showLyraLogoOnIncoming = enabled) }
+        preferences.setShowLyraLogoOnIncoming(enabled)
+    }
+
+    fun setAccessibilityAutomationEnabled(enabled: Boolean) = viewModelScope.launch {
+        autoReplyRepository.updateFeatureSettings { it.copy(accessibilityAutomationEnabled = enabled) }
+        preferences.setAccessibilityAutomationEnabled(enabled)
+        refreshPermissions()
+    }
+
+    fun setUssdDirectHandlerEnabled(enabled: Boolean) = viewModelScope.launch {
+        autoReplyRepository.updateFeatureSettings { it.copy(ussdDirectHandlerEnabled = enabled) }
+        preferences.setUssdDirectHandlerEnabled(enabled)
+    }
+
+    fun setShowMostFrequentContacts(enabled: Boolean) = viewModelScope.launch {
+        autoReplyRepository.updateFeatureSettings { it.copy(showMostFrequentContacts = enabled) }
+        preferences.setShowMostFrequentContacts(enabled)
+    }
+
+    fun setAutoReplyMasterEnabled(enabled: Boolean) = viewModelScope.launch {
+        val selected = customFeatureSettings.value.activeAutoReplyModeId.ifBlank { "driving" }
+        autoReplyRepository.setMasterEnabled(enabled = enabled, selectedModeId = selected)
+        preferences.setAutoReplyState(masterEnabled = enabled, activeModeId = selected)
+    }
+
+    fun selectAutoReplyMode(modeId: String) = viewModelScope.launch {
+        autoReplyRepository.selectMode(modeId)
+        preferences.setAutoReplyState(
+            masterEnabled = customFeatureSettings.value.autoReplyMasterEnabled,
+            activeModeId = modeId
+        )
+    }
+
+    fun saveAutoReplyMessage(modeId: String, message: String) = viewModelScope.launch {
+        autoReplyRepository.saveCustomMessage(modeId, message)
+    }
+
+    fun resetAutoReplyMessage(modeId: String) = viewModelScope.launch {
+        autoReplyRepository.resetModeMessageToDefault(modeId)
+    }
 
     fun applyCroppedDashboardImage(
         sourceBitmap: android.graphics.Bitmap,

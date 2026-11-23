@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.filled.Summarize
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -141,11 +142,22 @@ fun SettingsScreen(
     val autoSendQuickSms by viewModel.autoSendQuickSms.collectAsStateWithLifecycle()
     val blockUnknownCalls by viewModel.blockUnknownCalls.collectAsStateWithLifecycle()
     val blockCommercialPrefixes by viewModel.blockCommercialPrefixes.collectAsStateWithLifecycle()
+    val autoReplyModes by viewModel.autoReplyModes.collectAsStateWithLifecycle()
+    val customFeatureSettings by viewModel.customFeatureSettings.collectAsStateWithLifecycle()
+    val showLyraLogoOnIncoming by viewModel.showLyraLogoOnIncoming.collectAsStateWithLifecycle()
+    val accessibilityAutomationEnabled by viewModel.accessibilityAutomationEnabled.collectAsStateWithLifecycle()
+    val ussdDirectHandlerEnabled by viewModel.ussdDirectHandlerEnabled.collectAsStateWithLifecycle()
+    val showMostFrequentContacts by viewModel.showMostFrequentContacts.collectAsStateWithLifecycle()
+    val autoReplyMasterEnabled by viewModel.autoReplyMasterEnabled.collectAsStateWithLifecycle()
+    val activeAutoReplyMode by viewModel.activeAutoReplyMode.collectAsStateWithLifecycle()
+    val accessibilityServiceConnected by viewModel.accessibilityServiceConnected.collectAsStateWithLifecycle()
     val colors = LyraTheme.colors
 
     // Modular collapsible section states (AI Provider & Call Screen start cleanly collapsed)
     var appearanceExpanded by rememberSaveable { mutableStateOf(true) }
     var blockerExpanded by rememberSaveable { mutableStateOf(true) }
+    var autoReplyExpanded by rememberSaveable { mutableStateOf(false) }
+    var customFeaturesExpanded by rememberSaveable { mutableStateOf(false) }
     var aiEngineExpanded by rememberSaveable { mutableStateOf(false) }
     var callScreenExpanded by rememberSaveable { mutableStateOf(false) }
     var callingAlertsExpanded by rememberSaveable { mutableStateOf(false) }
@@ -154,6 +166,8 @@ fun SettingsScreen(
 
     val allExpanded = appearanceExpanded &&
         blockerExpanded &&
+        autoReplyExpanded &&
+        customFeaturesExpanded &&
         aiEngineExpanded &&
         callScreenExpanded &&
         callingAlertsExpanded &&
@@ -270,6 +284,8 @@ fun SettingsScreen(
                                 val next = !allExpanded
                                 appearanceExpanded = next
                                 blockerExpanded = next
+                                autoReplyExpanded = next
+                                customFeaturesExpanded = next
                                 aiEngineExpanded = next
                                 callScreenExpanded = next
                                 callingAlertsExpanded = next
@@ -358,6 +374,92 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setBlockCommercialPrefixes(it) },
                         accentColor = colors.priorityColor,
                         testTag = "setting_block_commercial_prefixes"
+                    )
+                }
+            }
+
+            // Module 2B: Auto-Reply Status Modes (24 Pre-Fed Modes + Custom SMS)
+            item(key = "module_auto_reply_modes") {
+                val selectedModeId = customFeatureSettings.activeAutoReplyModeId.ifBlank {
+                    autoReplyModes.firstOrNull()?.modeId ?: "driving"
+                }
+                val modeTitle = activeAutoReplyMode?.let { "${it.emoji} ${it.title}" }
+                    ?: autoReplyModes.firstOrNull { it.modeId == selectedModeId }?.let { "${it.emoji} ${it.title}" }
+                    ?: "24 Preset Modes"
+                ExpandableSettingsModule(
+                    moduleKey = "auto_reply_modes",
+                    title = "Auto-Reply Status Modes",
+                    summary = if (autoReplyMasterEnabled) {
+                        "Active: $modeTitle • Auto-cuts & texts callers"
+                    } else {
+                        "${autoReplyModes.size.coerceAtLeast(24)} modes ready • Editable custom SMS replies"
+                    },
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    expanded = autoReplyExpanded,
+                    onToggleExpand = { autoReplyExpanded = !autoReplyExpanded },
+                    accentColor = colors.acceptColor,
+                    statusBadge = if (autoReplyMasterEnabled) "On" else "Off",
+                    statusBadgeColor = if (autoReplyMasterEnabled) colors.acceptColor else colors.textMuted
+                ) {
+                    AutoReplyModesModuleBody(
+                        modes = autoReplyModes,
+                        masterEnabled = autoReplyMasterEnabled,
+                        selectedModeId = selectedModeId,
+                        sendSmsAllowed = perms.sendSmsAllowed,
+                        onToggleMaster = { enable ->
+                            viewModel.setAutoReplyMasterEnabled(enable)
+                            if (enable && !perms.sendSmsAllowed) {
+                                smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
+                            }
+                        },
+                        onSelectMode = { modeId -> viewModel.selectAutoReplyMode(modeId) },
+                        onSaveMessage = { modeId, msg -> viewModel.saveAutoReplyMessage(modeId, msg) },
+                        onResetMessage = { modeId -> viewModel.resetAutoReplyMessage(modeId) },
+                        onRequestSmsPermission = {
+                            smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
+                        }
+                    )
+                }
+            }
+
+            // Module 2C: Custom Features & Security Controls
+            item(key = "module_custom_features") {
+                val activeCount = listOf(
+                    showLyraLogoOnIncoming,
+                    showMostFrequentContacts,
+                    ussdDirectHandlerEnabled,
+                    accessibilityAutomationEnabled,
+                    perms.deviceAdminActive || perms.deviceOwnerActive,
+                    perms.dndAllowed
+                ).count { it }
+                ExpandableSettingsModule(
+                    moduleKey = "custom_features",
+                    title = "Custom Features & Security",
+                    summary = "Logo toggle • Frequent callers • USSD • DND & Uninstall lock",
+                    icon = Icons.Default.Tune,
+                    expanded = customFeaturesExpanded,
+                    onToggleExpand = { customFeaturesExpanded = !customFeaturesExpanded },
+                    accentColor = colors.secondaryGlow,
+                    statusBadge = "$activeCount Active",
+                    statusBadgeColor = colors.secondaryGlow
+                ) {
+                    CustomFeaturesModuleBody(
+                        context = context,
+                        showLyraLogoOnIncoming = showLyraLogoOnIncoming,
+                        onShowLyraLogoChange = { viewModel.setShowLyraLogoOnIncoming(it) },
+                        showMostFrequentContacts = showMostFrequentContacts,
+                        onShowMostFrequentChange = { viewModel.setShowMostFrequentContacts(it) },
+                        ussdDirectHandlerEnabled = ussdDirectHandlerEnabled,
+                        onUssdDirectHandlerChange = { viewModel.setUssdDirectHandlerEnabled(it) },
+                        accessibilityAutomationEnabled = accessibilityAutomationEnabled,
+                        onAccessibilityAutomationChange = { viewModel.setAccessibilityAutomationEnabled(it) },
+                        accessibilityServiceConnected = accessibilityServiceConnected,
+                        perms = perms,
+                        onLaunchIntent = { intent ->
+                            runCatching { roleLauncher.launch(intent) }
+                                .onFailure { PermissionHelper.openAppSettings(context) }
+                        },
+                        onDeactivateDeviceAdmin = { viewModel.deactivateDeviceAdmin() }
                     )
                 }
             }

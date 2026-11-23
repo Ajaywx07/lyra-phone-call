@@ -86,6 +86,11 @@ android {
 tasks.withType<Test> {
   failFast = true
   timeout.set(Duration.ofMinutes(2))
+  val prewarmedM2 = file("/home/appuser/.m2/repository")
+  if (prewarmedM2.exists() && System.getProperty("user.home") != "/home/appuser") {
+    systemProperty("robolectric.dependency.repo.url", prewarmedM2.toURI().toString())
+    systemProperty("robolectric.dependency.repo.id", "local-prewarmed-m2")
+  }
   testLogging {
     events("passed", "failed", "skipped")
   }

@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -104,6 +105,7 @@ fun IncomingCallScreen(
     val autoSendQuickSms by viewModel.autoSendQuickSms.collectAsStateWithLifecycle()
     val isSilenced by viewModel.isRingerSilenced.collectAsStateWithLifecycle()
     val showContactPhoto by viewModel.showContactPhotoOnCall.collectAsStateWithLifecycle()
+    val showLyraLogo by viewModel.showLyraLogoOnIncoming.collectAsStateWithLifecycle()
 
     DisposableEffect(Unit) {
         CallStateManager.setFullScreenIncomingUiVisible(true)
@@ -185,10 +187,20 @@ fun IncomingCallScreen(
                     LyraAiIncomingHeader(
                         caller = activeCaller,
                         simLabel = activeSimLabel,
-                        isSilenced = isSilenced
+                        isSilenced = isSilenced,
+                        showLyraLogo = showLyraLogo
                     )
                     AnimatedVisibility(visible = true, enter = fadeIn(tween(180))) {
-                        CallerCard(caller = activeCaller.copy(photoUri = callerPhoto))
+                        ElevatedIncomingCallerCard(
+                            caller = activeCaller.copy(photoUri = callerPhoto),
+                            simLabel = activeSimLabel,
+                            accentColor = accentColor,
+                            containerColor = themeColors.surfaceElevated.copy(alpha = 0.88f),
+                            borderColor = accentColor.copy(alpha = 0.38f),
+                            primaryTextColor = themeColors.textPrimary,
+                            secondaryTextColor = themeColors.primaryGlow,
+                            showAvatar = true
+                        )
                     }
                     StandardIncomingActions(
                         isSilenced = isSilenced,
@@ -210,11 +222,17 @@ fun IncomingCallScreen(
                 }
 
                 CallScreenStyle.IPHONE -> {
-                    // Top iOS Typography Block
+                    // Top Status & Optional Lyra Logo Pill + Elevated Caller Card
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 28.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 18.dp)
                     ) {
+                        if (showLyraLogo) {
+                            IncomingLyraLogoBadge(accentColor = Color.White, surfaceColor = Color.White.copy(alpha = 0.14f))
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
                         Surface(
                             color = Color.White.copy(alpha = 0.12f),
                             shape = CircleShape,
@@ -231,40 +249,28 @@ fun IncomingCallScreen(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = activeCaller.displayName,
-                            color = Color.White,
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.Light,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = activeCaller.formattedNumber,
-                            color = Color(0xFFCBD5E1),
-                            fontSize = 16.sp
+                        Spacer(modifier = Modifier.height(18.dp))
+                        ElevatedIncomingCallerCard(
+                            caller = activeCaller.copy(photoUri = callerPhoto),
+                            simLabel = activeSimLabel,
+                            accentColor = Color.White,
+                            containerColor = Color(0xFF1A2232).copy(alpha = 0.86f),
+                            borderColor = Color.White.copy(alpha = 0.22f),
+                            primaryTextColor = Color.White,
+                            secondaryTextColor = Color(0xFFCBD5E1),
+                            showAvatar = true
                         )
                     }
 
-                    // Center Caller Photo or Monogram Circle
-                    LyraContactAvatar(
-                        name = activeCaller.displayName,
-                        photoUri = callerPhoto,
-                        isOwner = activeCaller.isOwner,
-                        isPriority = activeCaller.isPriority,
-                        size = 116.dp,
-                        accentColor = Color.White
-                    )
-
-                    // iOS Bottom Section: Message/Silence + Slide-to-Answer + End Call / Voicemail / Pick Up
+                    // iOS Bottom Section: Aligned Message/Silence + Slide-to-Answer + End Call / Voicemail / Pick Up
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             CallActionButton(
                                 icon = Icons.AutoMirrored.Filled.VolumeOff,
@@ -274,6 +280,7 @@ fun IncomingCallScreen(
                                 contentColor = Color.White,
                                 size = 50.dp,
                                 iconSize = 22.dp,
+                                modifier = Modifier.weight(1f),
                                 testTagOverride = if (isSilenced) "call_action_Silenced" else "call_action_Silence"
                             )
                             CallActionButton(
@@ -284,6 +291,7 @@ fun IncomingCallScreen(
                                 contentColor = Color.White,
                                 size = 50.dp,
                                 iconSize = 22.dp,
+                                modifier = Modifier.weight(1f),
                                 testTagOverride = "call_action_Message"
                             )
                         }
@@ -350,41 +358,17 @@ fun IncomingCallScreen(
                 }
 
                 CallScreenStyle.NORMAL -> {
-                    // Clean Classic Material Header
+                    // Clean Classic Material Header + Elevated Identity Card
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 24.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
                     ) {
-                        Text(
-                            text = "Incoming Call • $activeSimLabel",
-                            color = themeColors.textSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(20.dp))
-                        LyraContactAvatar(
-                            name = activeCaller.displayName,
-                            photoUri = callerPhoto,
-                            isOwner = activeCaller.isOwner,
-                            isPriority = activeCaller.isPriority,
-                            size = 96.dp,
-                            accentColor = themeColors.primary
-                        )
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Text(
-                            text = activeCaller.displayName,
-                            color = themeColors.textPrimary,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = activeCaller.formattedNumber,
-                            color = themeColors.primaryGlow,
-                            fontSize = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        if (showLyraLogo) {
+                            IncomingLyraLogoBadge(accentColor = themeColors.primary, surfaceColor = themeColors.surfaceElevated)
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
                         Surface(
                             color = themeColors.surfaceElevated,
                             shape = CircleShape,
@@ -392,14 +376,26 @@ fun IncomingCallScreen(
                         ) {
                             Text(
                                 text = buildString {
-                                    append(if (activeCaller.isKnown) activeCaller.contactLabel else "Unsaved Number")
+                                    append("Incoming Call • $activeSimLabel")
                                     if (isSilenced) append(" • Silenced")
                                 },
-                                color = if (activeCaller.isPriority) AmberPriority else themeColors.textSecondary,
+                                color = themeColors.textSecondary,
                                 fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
                             )
                         }
+                        Spacer(modifier = Modifier.height(18.dp))
+                        ElevatedIncomingCallerCard(
+                            caller = activeCaller.copy(photoUri = callerPhoto),
+                            simLabel = activeSimLabel,
+                            accentColor = themeColors.primary,
+                            containerColor = themeColors.surfaceElevated.copy(alpha = 0.90f),
+                            borderColor = themeColors.glassBorder,
+                            primaryTextColor = themeColors.textPrimary,
+                            secondaryTextColor = themeColors.primaryGlow,
+                            showAvatar = true
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -429,8 +425,14 @@ fun IncomingCallScreen(
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp)
                     ) {
+                        if (showLyraLogo) {
+                            IncomingLyraLogoBadge(accentColor = pixelBlue, surfaceColor = pixelSurface)
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
                         Surface(
                             color = pixelSurface,
                             shape = CircleShape,
@@ -459,32 +461,17 @@ fun IncomingCallScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
-                        LyraContactAvatar(
-                            name = activeCaller.displayName,
-                            photoUri = callerPhoto,
-                            isOwner = activeCaller.isOwner,
-                            isPriority = activeCaller.isPriority,
-                            size = 112.dp,
-                            accentColor = pixelBlue
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = activeCaller.displayName,
-                            color = Color.White,
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${activeCaller.contactLabel} • ${activeCaller.formattedNumber}",
-                            color = Color(0xFFCBD5E1),
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center
+                        ElevatedIncomingCallerCard(
+                            caller = activeCaller.copy(photoUri = callerPhoto),
+                            simLabel = activeSimLabel,
+                            accentColor = pixelBlue,
+                            containerColor = pixelSurface.copy(alpha = 0.90f),
+                            borderColor = pixelBlue.copy(alpha = 0.38f),
+                            primaryTextColor = Color.White,
+                            secondaryTextColor = Color(0xFFCBD5E1),
+                            showAvatar = true
                         )
                     }
 
@@ -512,7 +499,9 @@ fun IncomingCallScreen(
 
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(bottom = 22.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 20.dp)
                         ) {
                             Button(
                                 onClick = { isPixelScreening = !isPixelScreening },
@@ -520,7 +509,10 @@ fun IncomingCallScreen(
                                     containerColor = if (isPixelScreening) pixelBlue else pixelSurface
                                 ),
                                 shape = RoundedCornerShape(24.dp),
-                                modifier = Modifier.testTag("pixel_screen_call_btn")
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("pixel_screen_call_btn")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
@@ -533,14 +525,18 @@ fun IncomingCallScreen(
                                     text = if (isPixelScreening) "Screening..." else "Screen Call",
                                     color = if (isPixelScreening) Color.Black else pixelBlue,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
                                 )
                             }
 
                             Button(
                                 onClick = { showQuickMessageDialog = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = pixelSurface),
-                                shape = RoundedCornerShape(24.dp)
+                                shape = RoundedCornerShape(24.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Message,
@@ -549,7 +545,7 @@ fun IncomingCallScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Message", color = Color.White, fontSize = 13.sp)
+                                Text("Message", color = Color.White, fontSize = 13.sp, maxLines = 1)
                             }
                         }
 
@@ -727,10 +723,138 @@ fun IncomingCallScreen(
 }
 
 @Composable
+private fun IncomingLyraLogoBadge(
+    accentColor: Color,
+    surfaceColor: Color
+) {
+    Surface(
+        color = surfaceColor,
+        shape = CircleShape,
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f)),
+        shadowElevation = 4.dp,
+        modifier = Modifier.testTag("incoming_lyra_logo")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = "Lyra Logo",
+                tint = accentColor,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = "LYRA",
+                color = accentColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.6.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun ElevatedIncomingCallerCard(
+    caller: CallerInfo,
+    simLabel: String,
+    accentColor: Color,
+    containerColor: Color,
+    borderColor: Color,
+    primaryTextColor: Color,
+    secondaryTextColor: Color,
+    showAvatar: Boolean = true
+) {
+    Surface(
+        color = containerColor,
+        shape = RoundedCornerShape(28.dp),
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = 10.dp,
+        tonalElevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("incoming_caller_identity_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (showAvatar) {
+                LyraContactAvatar(
+                    name = caller.displayName,
+                    photoUri = caller.photoUri,
+                    isOwner = caller.isOwner,
+                    isPriority = caller.isPriority,
+                    size = 92.dp,
+                    accentColor = accentColor
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+            }
+
+            Text(
+                text = caller.displayName,
+                color = primaryTextColor,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = caller.formattedNumber,
+                color = secondaryTextColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.6.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val badgeText = when {
+                caller.isOwner -> "Owner Priority • $simLabel"
+                caller.isPriority -> "VIP Contact • $simLabel"
+                caller.isKnown -> "${caller.contactLabel} • $simLabel"
+                else -> "Unknown Caller • $simLabel"
+            }
+            val badgeTint = when {
+                caller.isOwner || caller.isPriority -> AmberPriority
+                caller.isKnown -> accentColor
+                else -> secondaryTextColor
+            }
+            Surface(
+                color = badgeTint.copy(alpha = 0.14f),
+                shape = CircleShape,
+                border = BorderStroke(1.dp, badgeTint.copy(alpha = 0.42f))
+            ) {
+                Text(
+                    text = badgeText,
+                    color = badgeTint,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun LyraAiIncomingHeader(
     caller: CallerInfo,
     simLabel: String,
-    isSilenced: Boolean
+    isSilenced: Boolean,
+    showLyraLogo: Boolean
 ) {
     val themeColors = LyraTheme.colors
     Column(
@@ -761,11 +885,15 @@ private fun LyraAiIncomingHeader(
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
-        Spacer(modifier = Modifier.height(14.dp))
-        LyraOrb(
-            size = 104.dp,
-            customStatusText = if (caller.isOwner) "Owner Priority Verified" else "Screening caller ID..."
-        )
+        if (showLyraLogo) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Box(modifier = Modifier.testTag("incoming_lyra_logo")) {
+                LyraOrb(
+                    size = 96.dp,
+                    customStatusText = if (caller.isOwner) "Owner Priority Verified" else "Screening caller ID..."
+                )
+            }
+        }
     }
 }
 
@@ -784,8 +912,9 @@ private fun StandardIncomingActions(
         modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             CallActionButton(
                 icon = Icons.AutoMirrored.Filled.Message,
@@ -795,6 +924,7 @@ private fun StandardIncomingActions(
                 contentColor = themeColors.primary,
                 size = 52.dp,
                 iconSize = 22.dp,
+                modifier = Modifier.weight(1f),
                 testTagOverride = "call_action_Message"
             )
             CallActionButton(
@@ -805,6 +935,7 @@ private fun StandardIncomingActions(
                 contentColor = if (isSilenced) themeColors.primaryGlow else themeColors.textSecondary,
                 size = 52.dp,
                 iconSize = 22.dp,
+                modifier = Modifier.weight(1f),
                 testTagOverride = if (isSilenced) "call_action_Silenced" else "call_action_Silence"
             )
         }

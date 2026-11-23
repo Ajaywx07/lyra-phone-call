@@ -95,6 +95,14 @@ class LyraPreferences(private val context: Context) {
         val KEY_GITHUB_UPDATE_REPO = stringPreferencesKey("github_update_repo")
         val KEY_SKIPPED_UPDATE_VERSION = stringPreferencesKey("skipped_update_version")
 
+        // Custom UI, Accessibility, USSD, Most Frequent & Auto-Reply snapshot keys
+        val KEY_SHOW_LYRA_LOGO_ON_INCOMING = booleanPreferencesKey("show_lyra_logo_on_incoming")
+        val KEY_ACCESSIBILITY_AUTOMATION_ENABLED = booleanPreferencesKey("accessibility_automation_enabled")
+        val KEY_USSD_DIRECT_HANDLER_ENABLED = booleanPreferencesKey("ussd_direct_handler_enabled")
+        val KEY_SHOW_MOST_FREQUENT_CONTACTS = booleanPreferencesKey("show_most_frequent_contacts")
+        val KEY_AUTO_REPLY_MASTER_ENABLED = booleanPreferencesKey("auto_reply_master_enabled")
+        val KEY_ACTIVE_AUTO_REPLY_MODE_ID = stringPreferencesKey("active_auto_reply_mode_id")
+
         @Volatile
         private var cachedIncomingSnapshot: IncomingCallSettingsSnapshot? = null
 
@@ -112,7 +120,11 @@ class LyraPreferences(private val context: Context) {
                 showContactPhotoOnCall = preferences[KEY_SHOW_CONTACT_PHOTO_ON_CALL] ?: true,
                 blockUnknownCalls = preferences[KEY_BLOCK_UNKNOWN_CALLS] ?: false,
                 blockCommercialPrefixes = preferences[KEY_BLOCK_COMMERCIAL_PREFIXES] ?: false,
-                themeMode = preferences[KEY_THEME_MODE] ?: "IOS_GLASS"
+                themeMode = preferences[KEY_THEME_MODE] ?: "IOS_GLASS",
+                showLyraLogoOnIncoming = preferences[KEY_SHOW_LYRA_LOGO_ON_INCOMING] ?: true,
+                accessibilityAutomationEnabled = preferences[KEY_ACCESSIBILITY_AUTOMATION_ENABLED] ?: false,
+                hasActiveAutoReplyMode = preferences[KEY_AUTO_REPLY_MASTER_ENABLED] ?: false,
+                activeAutoReplyModeId = preferences[KEY_ACTIVE_AUTO_REPLY_MODE_ID] ?: ""
             ).also { cachedIncomingSnapshot = it }
         }
 
@@ -320,6 +332,30 @@ class LyraPreferences(private val context: Context) {
 
     val skippedUpdateVersion: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[KEY_SKIPPED_UPDATE_VERSION] ?: ""
+    }
+
+    val showLyraLogoOnIncoming: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SHOW_LYRA_LOGO_ON_INCOMING] ?: true
+    }
+
+    val accessibilityAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_ACCESSIBILITY_AUTOMATION_ENABLED] ?: false
+    }
+
+    val ussdDirectHandlerEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_USSD_DIRECT_HANDLER_ENABLED] ?: true
+    }
+
+    val showMostFrequentContacts: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SHOW_MOST_FREQUENT_CONTACTS] ?: true
+    }
+
+    val autoReplyMasterEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_AUTO_REPLY_MASTER_ENABLED] ?: false
+    }
+
+    val activeAutoReplyModeId: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_ACTIVE_AUTO_REPLY_MODE_ID] ?: ""
     }
 
     suspend fun getIncomingCallSettingsSnapshot(forceRefresh: Boolean = false): IncomingCallSettingsSnapshot {
@@ -574,6 +610,40 @@ class LyraPreferences(private val context: Context) {
     suspend fun setSkippedUpdateVersion(versionTag: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_SKIPPED_UPDATE_VERSION] = versionTag.trim()
+        }
+    }
+
+    suspend fun setShowLyraLogoOnIncoming(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SHOW_LYRA_LOGO_ON_INCOMING] = enabled
+            snapshotFromPreferences(prefs)
+        }
+    }
+
+    suspend fun setAccessibilityAutomationEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ACCESSIBILITY_AUTOMATION_ENABLED] = enabled
+            snapshotFromPreferences(prefs)
+        }
+    }
+
+    suspend fun setUssdDirectHandlerEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_USSD_DIRECT_HANDLER_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setShowMostFrequentContacts(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SHOW_MOST_FREQUENT_CONTACTS] = enabled
+        }
+    }
+
+    suspend fun setAutoReplyState(masterEnabled: Boolean, activeModeId: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_AUTO_REPLY_MASTER_ENABLED] = masterEnabled
+            prefs[KEY_ACTIVE_AUTO_REPLY_MODE_ID] = activeModeId
+            snapshotFromPreferences(prefs)
         }
     }
 }

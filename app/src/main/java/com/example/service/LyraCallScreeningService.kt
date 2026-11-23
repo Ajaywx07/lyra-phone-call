@@ -46,9 +46,11 @@ internal fun shouldBypassSlowScreeningLookup(
     isLyraEnabled: Boolean,
     blockUnknownCalls: Boolean,
     blockCommercialPrefixes: Boolean,
-    phoneNumber: String?
+    phoneNumber: String?,
+    hasActiveAutoReplyMode: Boolean = false
 ): Boolean {
     if (!isLyraEnabled || phoneNumber.isNullOrBlank()) return true
+    if (hasActiveAutoReplyMode) return false
     if (!blockUnknownCalls && !blockCommercialPrefixes) return true
     if (!blockUnknownCalls && blockCommercialPrefixes &&
         !PhoneNumberUtils.isCommercialTelemarketingNumber(phoneNumber)
@@ -60,8 +62,8 @@ internal fun shouldBypassSlowScreeningLookup(
 
 /**
  * Android CallScreeningService (API 29+) allowing Lyra to hold the Call Screening Role
- * and inspect incoming call metadata locally, applying optional unknown & commercial prefix filters
- * with sub-millisecond fast-path bypass so Telecom call notifications suffer zero delay.
+ * and inspect incoming call metadata locally, applying auto-reply mode rejection + SMS dispatch
+ * as well as optional unknown & commercial prefix filters with fast-path bypass.
  */
 @RequiresApi(Build.VERSION_CODES.Q)
 class LyraCallScreeningService : CallScreeningService() {
@@ -77,7 +79,8 @@ class LyraCallScreeningService : CallScreeningService() {
                 isLyraEnabled = cachedSnapshot.isLyraEnabled,
                 blockUnknownCalls = cachedSnapshot.blockUnknownCalls,
                 blockCommercialPrefixes = cachedSnapshot.blockCommercialPrefixes,
-                phoneNumber = number
+                phoneNumber = number,
+                hasActiveAutoReplyMode = cachedSnapshot.hasActiveAutoReplyMode
             )
         ) {
             respondToCall(callDetails, CallResponse.Builder().build())
@@ -89,11 +92,20 @@ class LyraCallScreeningService : CallScreeningService() {
             runCatching {
                 val prefs = LyraPreferences(applicationContext)
                 val snapshot = prefs.getIncomingCallSettingsSnapshot()
-                if (!shouldBypassSlowScreeningLookup(
+
+                // Auto-reply mode takes precedence: cut incoming call and auto-dispatch saved SMS
+                val autoReplyDecision = CallAutoReplyCoordinator.evaluateAndExecuteIfActive(
+                    context = applicationContext,
+                    incomingPhoneNumber = number
+                )
+                if (autoReplyDecision.shouldCutCall) {
+                    shouldBlock = true
+                } else if (!shouldBypassSlowScreeningLookup(
                         isLyraEnabled = snapshot.isLyraEnabled,
                         blockUnknownCalls = snapshot.blockUnknownCalls,
                         blockCommercialPrefixes = snapshot.blockCommercialPrefixes,
-                        phoneNumber = number
+                        phoneNumber = number,
+                        hasActiveAutoReplyMode = snapshot.hasActiveAutoReplyMode
                     )
                 ) {
                     val db = LyraDatabase.getDatabase(applicationContext)

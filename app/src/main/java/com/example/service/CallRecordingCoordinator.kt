@@ -55,6 +55,7 @@ object CallRecordingCoordinator {
 
     @SuppressLint("MissingPermission")
     fun startRecording(context: Context, callerName: String, callerNumber: String): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= 35) return false
         if (_isRecording.value) return true
 
         val hasMic = ContextCompat.checkSelfPermission(

@@ -129,3 +129,49 @@ interface CallRecordingDao {
     @Query("DELETE FROM call_recordings WHERE id = :id")
     suspend fun deleteRecordingById(id: Long)
 }
+
+@Dao
+interface AutoReplyModeDao {
+    @Query("SELECT * FROM auto_reply_modes ORDER BY sortOrder ASC")
+    fun observeAllModes(): Flow<List<com.example.data.local.entity.AutoReplyMode>>
+
+    @Query("SELECT * FROM auto_reply_modes ORDER BY sortOrder ASC")
+    suspend fun getAllModesOnce(): List<com.example.data.local.entity.AutoReplyMode>
+
+    @Query("SELECT * FROM auto_reply_modes WHERE modeId = :modeId LIMIT 1")
+    suspend fun getModeById(modeId: String): com.example.data.local.entity.AutoReplyMode?
+
+    @Query("SELECT * FROM auto_reply_modes WHERE isActive = 1 LIMIT 1")
+    suspend fun getActiveMode(): com.example.data.local.entity.AutoReplyMode?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMissingModes(modes: List<com.example.data.local.entity.AutoReplyMode>)
+
+    @Update
+    suspend fun updateMode(mode: com.example.data.local.entity.AutoReplyMode)
+
+    @Query("UPDATE auto_reply_modes SET isActive = 0, updatedAtMillis = :updatedAt")
+    suspend fun deactivateAllModes(updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE auto_reply_modes SET isActive = CASE WHEN modeId = :modeId THEN 1 ELSE 0 END, updatedAtMillis = :updatedAt")
+    suspend fun setActiveMode(modeId: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE auto_reply_modes SET customMessage = :message, updatedAtMillis = :updatedAt WHERE modeId = :modeId")
+    suspend fun updateCustomMessage(modeId: String, message: String, updatedAt: Long = System.currentTimeMillis())
+}
+
+@Dao
+interface CustomFeatureSettingsDao {
+    @Query("SELECT * FROM custom_feature_settings WHERE id = 1 LIMIT 1")
+    fun observeSettings(): Flow<com.example.data.local.entity.CustomFeatureSettings?>
+
+    @Query("SELECT * FROM custom_feature_settings WHERE id = 1 LIMIT 1")
+    suspend fun getSettingsOnce(): com.example.data.local.entity.CustomFeatureSettings?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSettings(settings: com.example.data.local.entity.CustomFeatureSettings)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDefaultIfMissing(settings: com.example.data.local.entity.CustomFeatureSettings)
+}
+

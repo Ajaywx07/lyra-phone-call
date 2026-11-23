@@ -270,22 +270,50 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
 
     private fun refreshMultiCallState() {
         val snapshot = liveCallsSnapshot()
+        val allParticipantCalls = mutableListOf<Call>()
+        snapshot.forEach { call ->
+            val children = runCatching { call.children }.getOrNull()
+            if (!children.isNullOrEmpty()) {
+                allParticipantCalls.addAll(children)
+            } else {
+                allParticipantCalls.add(call)
+            }
+        }
+        val distinctParticipants = allParticipantCalls.distinct()
+
+        val participantList = distinctParticipants.map { call ->
+            val stateInt = readCallState(call)
+            val stName = when (stateInt) {
+                Call.STATE_ACTIVE -> "Active"
+                Call.STATE_HOLDING -> "On Hold"
+                Call.STATE_RINGING -> "Ringing"
+                Call.STATE_DIALING -> "Dialing"
+                else -> "Connected"
+            }
+            val num = call.details?.handle?.schemeSpecificPart.orEmpty()
+            val name = extractTelecomDisplayName(call) ?: num.ifBlank { "Caller" }
+            CallParticipant(
+                id = call.hashCode().toString(),
+                name = name,
+                number = num,
+                state = stName,
+                isHolding = (stateInt == Call.STATE_HOLDING)
+            )
+        }
+
+        CallStateManager.updateConferenceParticipants(participantList)
+
         val activeCalls = snapshot.filter { readCallState(it) == Call.STATE_ACTIVE }
         val holdingCalls = snapshot.filter { readCallState(it) == Call.STATE_HOLDING }
         val hasConferenceChildren = snapshot.any { runCatching { it.children.isNotEmpty() }.getOrDefault(false) }
         val hasConferenceable = snapshot.any { runCatching { it.conferenceableCalls.isNotEmpty() }.getOrDefault(false) }
-        val totalParticipants = maxOf(
-            snapshot.size,
-            snapshot.maxOfOrNull { runCatching { it.children.size }.getOrDefault(0) } ?: 1
-        ).coerceAtLeast(1)
         val canMerge = !hasConferenceChildren &&
             ((activeCalls.isNotEmpty() && holdingCalls.isNotEmpty()) || hasConferenceable)
 
         activeTelecomCall = resolvePrimaryCall()
-
         CallStateManager.updateConferenceInfo(
-            participantCount = totalParticipants,
-            isMerged = hasConferenceChildren,
+            participantCount = distinctParticipants.size,
+            isMerged = hasConferenceChildren || distinctParticipants.size > 1,
             canMerge = canMerge
         )
         CallStateManager.setHoldState(holdingCalls.isNotEmpty() && activeCalls.isEmpty())
@@ -369,6 +397,19 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
 
         override fun onChildrenChanged(call: Call?, children: MutableList<Call>?) {
             super.onChildrenChanged(call, children)
+            refreshMultiCallState()
+        }
+
+        override fun onParentChanged(call: Call?, parent: Call?) {
+            super.onParentChanged(call, parent)
+            refreshMultiCallState()
+        }
+
+        override fun onCallDestroyed(call: Call?) {
+            super.onCallDestroyed(call)
+            if (call != null) {
+                trackedCalls.remove(call)
+            }
             refreshMultiCallState()
         }
 
@@ -556,27 +597,56 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
             val cachedSettings = LyraPreferences.getCachedIncomingSnapshotOrNull()
                 ?: IncomingCallSettingsSnapshot()
 
-            CallStateManager.onIncomingCall(preliminaryCaller, simLabel = accountLabel)
-            startCallForegroundService()
-            NotificationHelper.dispatchIncomingCall(
-                context = applicationContext,
-                caller = preliminaryCaller,
-                fullscreenPreferenceEnabled = cachedSettings.isFullscreenIncomingEnabled,
-                incomingScreenEnabled = cachedSettings.isIncomingScreenEnabled,
-                backgroundCallingEnabled = cachedSettings.isBackgroundCallingEnabled,
-                persistentNotificationEnabled = cachedSettings.isPersistentNotificationEnabled,
-                showCallerPhoto = false
-            )
+            if (!cachedSettings.hasActiveAutoReplyMode) {
+                CallStateManager.onIncomingCall(preliminaryCaller, simLabel = accountLabel)
+                startCallForegroundService()
+                NotificationHelper.dispatchIncomingCall(
+                    context = applicationContext,
+                    caller = preliminaryCaller,
+                    fullscreenPreferenceEnabled = cachedSettings.isFullscreenIncomingEnabled,
+                    incomingScreenEnabled = cachedSettings.isIncomingScreenEnabled,
+                    backgroundCallingEnabled = cachedSettings.isBackgroundCallingEnabled,
+                    persistentNotificationEnabled = cachedSettings.isPersistentNotificationEnabled,
+                    showCallerPhoto = false
+                )
+            }
 
             serviceScope.launch {
+                val autoReplyDecision = CallAutoReplyCoordinator.evaluateAndExecuteIfActive(
+                    context = applicationContext,
+                    incomingPhoneNumber = handle
+                )
+                if (autoReplyDecision.shouldCutCall) {
+                    mainHandler.post {
+                        runCatching {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                call.reject(Call.REJECT_REASON_DECLINED)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                call.reject(false, null)
+                            }
+                        }
+                        if (liveCallsSnapshot().size <= 1) {
+                            NotificationHelper.cancelAllCallNotifications(applicationContext)
+                            CallStateManager.onCallEnded()
+                        }
+                    }
+                    return@launch
+                }
+
                 val db = LyraDatabase.getDatabase(applicationContext)
                 val prefs = LyraPreferences(applicationContext)
                 val settings = prefs.getIncomingCallSettingsSnapshot()
                 val repo = ContactsRepository(applicationContext, db.priorityContactDao(), prefs)
                 val resolvedCaller = repo.resolveCaller(handle)
+                if (cachedSettings.hasActiveAutoReplyMode && CallStateManager.callState.value != CallStateEnum.RINGING) {
+                    CallStateManager.onIncomingCall(resolvedCaller, simLabel = accountLabel)
+                    startCallForegroundService()
+                }
                 if (CallStateManager.callState.value == CallStateEnum.RINGING) {
                     CallStateManager.updateCurrentCaller(resolvedCaller, simLabel = accountLabel)
-                    if (resolvedCaller != preliminaryCaller ||
+                    if (cachedSettings.hasActiveAutoReplyMode ||
+                        resolvedCaller != preliminaryCaller ||
                         (settings.showContactPhotoOnCall && !resolvedCaller.photoUri.isNullOrBlank())
                     ) {
                         NotificationHelper.dispatchIncomingCall(
@@ -821,6 +891,31 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         runCatching {
             target.playDtmfTone(digit)
             target.stopDtmfTone()
+        }
+    }
+
+    override fun disconnectParticipant(participantId: String) {
+        val allCalls = trackedCalls.toList() + listOfNotNull(activeTelecomCall)
+        val target = allCalls.firstOrNull { it.hashCode().toString() == participantId }
+            ?: liveCallsSnapshot().firstOrNull { call ->
+                call.hashCode().toString() == participantId ||
+                    runCatching { call.children.any { c -> c.hashCode().toString() == participantId } }.getOrDefault(false)
+            }
+        if (target != null) {
+            val child = runCatching { target.children.firstOrNull { it.hashCode().toString() == participantId } }.getOrNull()
+            val callToDisconnect = child ?: target
+            runCatching { callToDisconnect.disconnect() }
+        }
+    }
+
+    override fun holdParticipant(participantId: String, hold: Boolean) {
+        val allCalls = trackedCalls.toList() + listOfNotNull(activeTelecomCall)
+        val target = allCalls.firstOrNull { it.hashCode().toString() == participantId }
+            ?: liveCallsSnapshot().firstOrNull { it.hashCode().toString() == participantId }
+        if (target != null) {
+            runCatching {
+                if (hold) target.hold() else target.unhold()
+            }
         }
     }
 }

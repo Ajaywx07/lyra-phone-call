@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.CallMade
@@ -51,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,6 +82,7 @@ import com.example.ui.theme.CrimsonDecline
 import com.example.ui.theme.EmeraldAccept
 import com.example.ui.theme.LyraTheme
 import com.example.ui.viewmodel.LyraMainViewModel
+import com.example.utils.ExternalIntentHelper
 import com.example.utils.PhoneNumberUtils
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -90,6 +93,7 @@ fun ContactDetailsScreen(
     viewModel: LyraMainViewModel,
     onBackClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val colors = LyraTheme.colors
     val selectedContact by viewModel.selectedContact.collectAsStateWithLifecycle()
     val allNotes by viewModel.allNotes.collectAsStateWithLifecycle()
@@ -241,7 +245,7 @@ fun ContactDetailsScreen(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    // Action Buttons: Call, SMS, Note, Edit, Star Priority
+                    // Action Buttons: Balanced 2 rows of 3 (Call, SMS, WhatsApp / Note, Edit, Priority)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
@@ -266,6 +270,24 @@ fun ContactDetailsScreen(
                             iconSize = 20.dp
                         )
 
+                        CallActionButton(
+                            icon = Icons.AutoMirrored.Filled.Chat,
+                            label = "WhatsApp",
+                            onClick = { ExternalIntentHelper.openWhatsAppChat(context, contact.phoneNumber) },
+                            containerColor = Color(0xFF25D366),
+                            contentColor = Color.White,
+                            size = 48.dp,
+                            iconSize = 20.dp,
+                            testTagOverride = "contact_whatsapp_btn"
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
                         CallActionButton(
                             icon = Icons.Default.NoteAdd,
                             label = "Note",

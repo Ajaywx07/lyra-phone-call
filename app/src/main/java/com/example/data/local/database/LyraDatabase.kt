@@ -6,15 +6,19 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.data.local.dao.AutoReplyModeDao
 import com.example.data.local.dao.CallNoteDao
 import com.example.data.local.dao.CallRecordingDao
 import com.example.data.local.dao.CallSummaryDao
+import com.example.data.local.dao.CustomFeatureSettingsDao
 import com.example.data.local.dao.PriorityContactDao
 import com.example.data.local.dao.ScheduledCallDao
 import com.example.data.local.dao.VoicemailDao
+import com.example.data.local.entity.AutoReplyMode
 import com.example.data.local.entity.CallNote
 import com.example.data.local.entity.CallRecording
 import com.example.data.local.entity.CallSummary
+import com.example.data.local.entity.CustomFeatureSettings
 import com.example.data.local.entity.PriorityContact
 import com.example.data.local.entity.ScheduledCall
 import com.example.data.local.entity.VoicemailEntry
@@ -26,9 +30,11 @@ import com.example.data.local.entity.VoicemailEntry
         PriorityContact::class,
         VoicemailEntry::class,
         ScheduledCall::class,
-        CallRecording::class
+        CallRecording::class,
+        AutoReplyMode::class,
+        CustomFeatureSettings::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class LyraDatabase : RoomDatabase() {
@@ -38,6 +44,8 @@ abstract class LyraDatabase : RoomDatabase() {
     abstract fun voicemailDao(): VoicemailDao
     abstract fun scheduledCallDao(): ScheduledCallDao
     abstract fun callRecordingDao(): CallRecordingDao
+    abstract fun autoReplyModeDao(): AutoReplyModeDao
+    abstract fun customFeatureSettingsDao(): CustomFeatureSettingsDao
 
     companion object {
         @Volatile
@@ -83,6 +91,37 @@ abstract class LyraDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `auto_reply_modes` (
+                        `modeId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `emoji` TEXT NOT NULL,
+                        `defaultMessage` TEXT NOT NULL,
+                        `customMessage` TEXT NOT NULL,
+                        `isActive` INTEGER NOT NULL DEFAULT 0,
+                        `sortOrder` INTEGER NOT NULL DEFAULT 0,
+                        `updatedAtMillis` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`modeId`)
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `custom_feature_settings` (
+                        `id` INTEGER NOT NULL DEFAULT 1,
+                        `showLyraLogoOnIncoming` INTEGER NOT NULL DEFAULT 1,
+                        `accessibilityAutomationEnabled` INTEGER NOT NULL DEFAULT 0,
+                        `ussdDirectHandlerEnabled` INTEGER NOT NULL DEFAULT 1,
+                        `showMostFrequentContacts` INTEGER NOT NULL DEFAULT 1,
+                        `autoReplyMasterEnabled` INTEGER NOT NULL DEFAULT 0,
+                        `activeAutoReplyModeId` TEXT NOT NULL DEFAULT '',
+                        `updatedAtMillis` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): LyraDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -90,7 +129,13 @@ abstract class LyraDatabase : RoomDatabase() {
                     LyraDatabase::class.java,
                     "lyra_calling_assistant.db"
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8
+                    )
                     .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance

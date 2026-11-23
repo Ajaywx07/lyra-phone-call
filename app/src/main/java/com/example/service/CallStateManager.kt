@@ -23,6 +23,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+data class CallParticipant(
+    val id: String,
+    val name: String,
+    val number: String,
+    val state: String,
+    val isHolding: Boolean
+)
+
 interface TelecomCallBridge {
     fun answerCall()
     fun rejectOrDisconnectCall(): Boolean
@@ -35,6 +43,8 @@ interface TelecomCallBridge {
     fun sendDtmf(digit: Char)
     fun hasLiveCalls(): Boolean = false
     fun syncCallsState() {}
+    fun disconnectParticipant(participantId: String) {}
+    fun holdParticipant(participantId: String, hold: Boolean) {}
 }
 
 object CallStateManager {
@@ -115,6 +125,25 @@ object CallStateManager {
 
     private val _isConferenceMerged = MutableStateFlow(false)
     val isConferenceMerged: StateFlow<Boolean> = _isConferenceMerged.asStateFlow()
+
+    private val _conferenceParticipants = MutableStateFlow<List<CallParticipant>>(emptyList())
+    val conferenceParticipants: StateFlow<List<CallParticipant>> = _conferenceParticipants.asStateFlow()
+
+    fun updateConferenceParticipants(participants: List<CallParticipant>) {
+        _conferenceParticipants.value = participants
+        _conferenceParticipantCount.value = participants.size.coerceAtLeast(1)
+        if (participants.size <= 1) {
+            _isConferenceMerged.value = false
+        }
+    }
+
+    fun disconnectParticipant(participantId: String) {
+        telecomBridge?.disconnectParticipant(participantId)
+    }
+
+    fun toggleHoldParticipant(participantId: String, hold: Boolean) {
+        telecomBridge?.holdParticipant(participantId, hold)
+    }
 
     private val _callStatusBanner = MutableStateFlow<String?>(null)
     val callStatusBanner: StateFlow<String?> = _callStatusBanner.asStateFlow()

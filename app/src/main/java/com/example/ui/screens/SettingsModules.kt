@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,15 +36,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessibilityNew
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Animation
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
@@ -50,6 +59,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.filled.Vibration
@@ -59,6 +69,8 @@ import androidx.compose.material.icons.filled.Voicemail
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -75,6 +87,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,6 +103,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.entity.AutoReplyMode
 import com.example.domain.model.AiProvider
 import com.example.domain.model.CallAnimationStyle
 import com.example.domain.model.CallScreenStyle
@@ -1127,3 +1143,412 @@ fun CallingSimAndAlertsModuleBody(
         )
     }
 }
+
+@Composable
+fun AutoReplyModesModuleBody(
+    modes: List<AutoReplyMode>,
+    masterEnabled: Boolean,
+    selectedModeId: String,
+    sendSmsAllowed: Boolean,
+    onToggleMaster: (Boolean) -> Unit,
+    onSelectMode: (String) -> Unit,
+    onSaveMessage: (String, String) -> Unit,
+    onResetMessage: (String) -> Unit,
+    onRequestSmsPermission: () -> Unit
+) {
+    val colors = LyraTheme.colors
+    val selectedMode = remember(modes, selectedModeId) {
+        modes.firstOrNull { it.modeId == selectedModeId } ?: modes.firstOrNull()
+    }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+    var messageDraft by remember(selectedMode?.modeId, selectedMode?.customMessage) {
+        mutableStateOf(selectedMode?.customMessage.orEmpty())
+    }
+    var savedFeedback by remember(selectedMode?.modeId) { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 10.dp)
+            ) {
+                Text(
+                    text = "Auto-Cut & Reply SMS",
+                    color = colors.textPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (masterEnabled && selectedMode != null) {
+                        "Active: ${selectedMode.emoji} ${selectedMode.title} • Incoming calls cut & replied via SMS"
+                    } else {
+                        "Automatically reject incoming calls and send your active mode SMS"
+                    },
+                    color = if (masterEnabled) colors.acceptColor else colors.textSecondary,
+                    fontSize = 11.sp
+                )
+            }
+            Switch(
+                checked = masterEnabled,
+                onCheckedChange = onToggleMaster,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = colors.onPrimaryButton,
+                    checkedTrackColor = colors.acceptColor
+                ),
+                modifier = Modifier.testTag("auto_reply_master_switch")
+            )
+        }
+
+        if (!sendSmsAllowed) {
+            Surface(
+                color = colors.priorityColor.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, colors.priorityColor.copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "SMS permission needed for automatic SMS replies.",
+                        color = colors.priorityColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    )
+                    TextButton(
+                        onClick = onRequestSmsPermission,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.testTag("auto_reply_grant_sms_btn")
+                    ) {
+                        Text("Grant SMS", color = colors.priorityColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        CapsuleGroupDivider()
+
+        if (selectedMode != null) {
+            Text(
+                text = "Status Mode (${modes.size} presets saved locally)",
+                color = colors.textSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    onClick = { dropdownExpanded = true },
+                    shape = RoundedCornerShape(16.dp),
+                    color = colors.surfaceElevated,
+                    border = BorderStroke(1.dp, colors.glassBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 52.dp)
+                        .testTag("auto_reply_mode_dropdown")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = selectedMode.emoji, fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    text = selectedMode.title,
+                                    color = colors.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Tap to choose from ${modes.size} pre-fed modes",
+                                    color = colors.primaryGlow,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Select Auto-Reply Status Mode",
+                            tint = colors.primary
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = dropdownExpanded,
+                    onDismissRequest = { dropdownExpanded = false },
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .background(colors.surfaceElevated)
+                ) {
+                    modes.forEach { mode ->
+                        val isCurrent = mode.modeId == selectedMode.modeId
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(text = mode.emoji, fontSize = 16.sp)
+                                    Text(
+                                        text = mode.title,
+                                        color = if (isCurrent) colors.primary else colors.textPrimary,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onSelectMode(mode.modeId)
+                                dropdownExpanded = false
+                                savedFeedback = null
+                            },
+                            modifier = Modifier.testTag("auto_reply_option_${mode.modeId}")
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = messageDraft,
+                onValueChange = {
+                    messageDraft = it
+                    savedFeedback = null
+                },
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Message, contentDescription = null, tint = colors.primaryGlow, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Custom SMS Reply for ${selectedMode.title}", color = colors.textSecondary, fontSize = 12.sp)
+                    }
+                },
+                minLines = 2,
+                maxLines = 4,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colors.primary,
+                    unfocusedBorderColor = colors.glassBorder,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("auto_reply_message_input")
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        onSaveMessage(selectedMode.modeId, messageDraft)
+                        savedFeedback = "Saved reply for ${selectedMode.title} ✓"
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("auto_reply_save_btn")
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = colors.onPrimaryButton, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Save Reply", color = colors.onPrimaryButton, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onResetMessage(selectedMode.modeId)
+                        messageDraft = selectedMode.defaultMessage
+                        savedFeedback = "Reset ${selectedMode.title} to default"
+                    },
+                    border = BorderStroke(1.dp, colors.glassBorder),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("auto_reply_reset_btn")
+                ) {
+                    Icon(Icons.Default.RestartAlt, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reset Default", color = colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            savedFeedback?.let { note ->
+                Text(
+                    text = note,
+                    color = colors.acceptColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CustomFeaturesModuleBody(
+    context: Context,
+    showLyraLogoOnIncoming: Boolean,
+    onShowLyraLogoChange: (Boolean) -> Unit,
+    showMostFrequentContacts: Boolean,
+    onShowMostFrequentChange: (Boolean) -> Unit,
+    ussdDirectHandlerEnabled: Boolean,
+    onUssdDirectHandlerChange: (Boolean) -> Unit,
+    accessibilityAutomationEnabled: Boolean,
+    onAccessibilityAutomationChange: (Boolean) -> Unit,
+    accessibilityServiceConnected: Boolean,
+    perms: PermissionsState,
+    onLaunchIntent: (Intent) -> Unit,
+    onDeactivateDeviceAdmin: () -> Boolean
+) {
+    val colors = LyraTheme.colors
+    Column(modifier = Modifier.fillMaxWidth()) {
+        CapsuleToggle(
+            title = "Show Lyra Logo on Incoming Call",
+            subtitle = "Display the animated Lyra emblem badge on incoming call screens",
+            icon = Icons.Default.AutoAwesome,
+            checked = showLyraLogoOnIncoming,
+            onCheckedChange = onShowLyraLogoChange,
+            testTag = "toggle_show_lyra_logo"
+        )
+        CapsuleGroupDivider()
+        CapsuleToggle(
+            title = "Most Frequent Connected Contacts",
+            subtitle = "Show top callers ranked strictly by connected calls (> 0s) on Contacts tab",
+            icon = Icons.Default.Groups,
+            checked = showMostFrequentContacts,
+            onCheckedChange = onShowMostFrequentChange,
+            testTag = "toggle_most_frequent_contacts"
+        )
+        CapsuleGroupDivider()
+        CapsuleToggle(
+            title = "Direct Carrier USSD Handler",
+            subtitle = "Run *121# / *# codes directly in-app with response dialog",
+            icon = Icons.Default.Dialpad,
+            checked = ussdDirectHandlerEnabled,
+            onCheckedChange = onUssdDirectHandlerChange,
+            testTag = "toggle_ussd_handler"
+        )
+        CapsuleGroupDivider()
+        CapsuleToggle(
+            title = "Optional Accessibility Automation",
+            subtitle = when {
+                !accessibilityAutomationEnabled -> "Off by default • Enable only if you want UI automation & auto-response helpers"
+                accessibilityServiceConnected -> "Connected • Accessibility automation active"
+                else -> "Switch ON • Tap below to allow Lyra in Android Accessibility settings"
+            },
+            icon = Icons.Default.AccessibilityNew,
+            checked = accessibilityAutomationEnabled,
+            onCheckedChange = onAccessibilityAutomationChange,
+            accentColor = colors.secondaryGlow,
+            testTag = "toggle_accessibility_automation"
+        )
+        if (accessibilityAutomationEnabled) {
+            CapsuleSettingsItem(
+                title = "Android Accessibility Settings",
+                subtitle = if (accessibilityServiceConnected) {
+                    "Service connected • Manage or turn off anytime"
+                } else {
+                    "Grant Accessibility permission to enable screen automation"
+                },
+                icon = Icons.Default.AccessibilityNew,
+                accentColor = if (accessibilityServiceConnected) colors.acceptColor else colors.priorityColor,
+                trailingBadge = if (accessibilityServiceConnected) "Connected" else "Open",
+                onClick = { onLaunchIntent(PermissionHelper.createAccessibilitySettingsIntent()) },
+                testTag = "settings_accessibility_shortcut"
+            )
+        }
+        CapsuleGroupDivider()
+        CapsuleSettingsItem(
+            title = "Do Not Disturb (DND) Policy Access",
+            subtitle = if (perms.dndAllowed) {
+                "Granted • Scheduled calls & priority caller alerts bypass silent mode"
+            } else {
+                "Recommended so priority & scheduled call rings break through DND"
+            },
+            icon = Icons.Default.DoNotDisturbOn,
+            accentColor = if (perms.dndAllowed) colors.acceptColor else colors.priorityColor,
+            trailingBadge = if (perms.dndAllowed) "Allowed" else "Allow",
+            onClick = { onLaunchIntent(PermissionHelper.createDndSettingsIntent()) },
+            testTag = "settings_dnd_policy_shortcut"
+        )
+        CapsuleGroupDivider()
+        CapsuleSettingsItem(
+            title = "Uninstall Protection (Device Admin)",
+            subtitle = when {
+                perms.deviceOwnerActive -> "Device Owner Active • Launcher uninstall blocked"
+                perms.deviceAdminActive -> "Device Admin Active • Requires revocation here before uninstall"
+                else -> "Protect Lyra from accidental home-screen/launcher uninstallation"
+            },
+            icon = Icons.Default.AdminPanelSettings,
+            accentColor = if (perms.deviceAdminActive || perms.deviceOwnerActive) colors.acceptColor else colors.primary,
+            trailingBadge = when {
+                perms.deviceOwnerActive -> "Owner"
+                perms.deviceAdminActive -> "Revoke"
+                else -> "Activate"
+            },
+            onClick = {
+                if (perms.deviceAdminActive && !perms.deviceOwnerActive) {
+                    if (!onDeactivateDeviceAdmin()) {
+                        onLaunchIntent(PermissionHelper.createSecurityDeviceAdminSettingsIntent())
+                    }
+                } else {
+                    onLaunchIntent(PermissionHelper.createDeviceAdminActivationIntent(context))
+                }
+            },
+            testTag = "settings_device_admin_action"
+        )
+        CapsuleGroupDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .testTag("settings_android15_recording_note"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = if (Build.VERSION.SDK_INT >= 35) colors.priorityColor else colors.primaryGlow,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = if (Build.VERSION.SDK_INT >= 35) {
+                    "Android 15+ Policy: Two-way native call recording is restricted and disabled on this OS level."
+                } else {
+                    "Call recording follows Android platform policy and is automatically blocked on Android 15+ devices."
+                },
+                color = colors.textSecondary,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+        }
+    }
+}
+

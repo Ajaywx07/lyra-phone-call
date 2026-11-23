@@ -64,6 +64,8 @@ import com.example.R
 import com.example.data.local.entity.CallRecording
 import com.example.domain.model.CallRecordingCapability
 import com.example.domain.model.RecordingPlaybackState
+import com.example.ui.components.LyraAmbientBackdrop
+import com.example.ui.components.LyraTopBar
 import com.example.ui.theme.LyraTheme
 import com.example.ui.viewmodel.LyraMainViewModel
 import java.text.SimpleDateFormat
@@ -97,54 +99,22 @@ fun CallRecordingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
-            .statusBarsPadding()
     ) {
+        LyraAmbientBackdrop()
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(horizontal = 16.dp)
+                .testTag("call_recordings_screen")
         ) {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier.testTag("recordings_back_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.action_back),
-                        tint = colors.textPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.title_call_recordings),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-                if (recordings.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.primary.copy(alpha = 0.15f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "${recordings.size}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.primary
-                        )
-                    }
-                }
-            }
+            LyraTopBar(
+                title = stringResource(R.string.title_call_recordings),
+                subtitle = if (capability.isSupported) "Saved Local Audio" else "Android 15+ Policy Restricted",
+                showBack = true,
+                onBackClick = onBackClick,
+                statusText = if (recordings.isNotEmpty()) "${recordings.size} Saved" else ""
+            )
 
             // Android restriction / capability notice card
             CapabilityNoticeCard(capability = capability)
@@ -219,29 +189,32 @@ fun CallRecordingsScreen(
 @Composable
 private fun CapabilityNoticeCard(capability: CallRecordingCapability) {
     val colors = LyraTheme.colors
+    val noticeBorder = if (capability.isSupported) colors.glassBorder else colors.declineColor.copy(alpha = 0.55f)
+    val noticeTint = if (capability.isSupported) colors.primary else colors.declineColor
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            .testTag("recordings_capability_notice"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surface.copy(alpha = 0.55f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                .border(1.dp, noticeBorder, RoundedCornerShape(16.dp))
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = null,
-                tint = colors.primary,
+                tint = noticeTint,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = stringResource(R.string.recording_disclaimer_notice),
+                text = capability.notice.ifBlank { stringResource(R.string.recording_disclaimer_notice) },
                 fontSize = 11.sp,
                 color = colors.textSecondary,
                 lineHeight = 15.sp

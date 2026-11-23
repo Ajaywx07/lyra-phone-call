@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
@@ -49,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +64,7 @@ import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.CrimsonDecline
 import com.example.ui.theme.EmeraldAccept
 import com.example.ui.theme.LyraTheme
+import com.example.utils.ExternalIntentHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -210,10 +213,12 @@ fun ContactProfileSheet(
     onQuickAutoSmsClick: () -> Unit,
     onAddNoteClick: () -> Unit,
     onEditClick: () -> Unit,
+    onWhatsAppClick: (() -> Unit)? = null,
     onTogglePriorityClick: (() -> Unit)? = null,
     onOpenFullProfileClick: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val colors = LyraTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val sortedHistory = remember(callHistory) {
@@ -297,7 +302,7 @@ fun ContactProfileSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Primary Actions Row: Call, SMS, Note, Edit
+            // Primary Actions Row: Call, SMS, WhatsApp, Note, Edit
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -308,8 +313,8 @@ fun ContactProfileSheet(
                     onClick = onCallClick,
                     containerColor = EmeraldAccept,
                     contentColor = Color.White,
-                    size = 52.dp,
-                    iconSize = 22.dp
+                    size = 48.dp,
+                    iconSize = 20.dp
                 )
                 CallActionButton(
                     icon = Icons.Default.Message,
@@ -317,8 +322,24 @@ fun ContactProfileSheet(
                     onClick = onSmsClick,
                     containerColor = colors.primary,
                     contentColor = colors.onPrimaryButton,
-                    size = 52.dp,
-                    iconSize = 22.dp
+                    size = 48.dp,
+                    iconSize = 20.dp
+                )
+                CallActionButton(
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    label = "WhatsApp",
+                    onClick = {
+                        if (onWhatsAppClick != null) {
+                            onWhatsAppClick()
+                        } else {
+                            ExternalIntentHelper.openWhatsAppChat(context, phoneNumber)
+                        }
+                    },
+                    containerColor = Color(0xFF25D366),
+                    contentColor = Color.White,
+                    size = 48.dp,
+                    iconSize = 20.dp,
+                    testTagOverride = "profile_sheet_whatsapp_btn"
                 )
                 CallActionButton(
                     icon = Icons.Default.NoteAdd,
@@ -326,8 +347,8 @@ fun ContactProfileSheet(
                     onClick = onAddNoteClick,
                     containerColor = colors.secondary,
                     contentColor = colors.onSecondaryButton,
-                    size = 52.dp,
-                    iconSize = 22.dp
+                    size = 48.dp,
+                    iconSize = 20.dp
                 )
                 CallActionButton(
                     icon = Icons.Default.Edit,
@@ -335,8 +356,8 @@ fun ContactProfileSheet(
                     onClick = onEditClick,
                     containerColor = colors.surfaceElevated,
                     contentColor = colors.primary,
-                    size = 52.dp,
-                    iconSize = 22.dp
+                    size = 48.dp,
+                    iconSize = 20.dp
                 )
             }
 

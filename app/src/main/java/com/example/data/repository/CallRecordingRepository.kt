@@ -31,7 +31,14 @@ class CallRecordingRepository(
         return CallRecordingStorage.createShareIntent(context, recording)
     }
 
-    fun getCapability(): CallRecordingCapability {
+    fun getCapability(sdkInt: Int = android.os.Build.VERSION.SDK_INT): CallRecordingCapability {
+        if (sdkInt >= 35) {
+            return CallRecordingCapability(
+                isSupported = false,
+                isTwoWaySupported = false,
+                notice = "Native call recording is disabled on Android 15+ (API 35+) to comply with platform privacy policies."
+            )
+        }
         return CallRecordingCapability(
             isSupported = true,
             isTwoWaySupported = false,

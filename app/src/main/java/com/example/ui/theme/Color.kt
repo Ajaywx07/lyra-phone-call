@@ -73,6 +73,30 @@ enum class AppThemeStyle(
         displayName = "Pure AMOLED",
         subtitle = "True #000000 OLED dark",
         isLight = false
+    ),
+    SUNSET_EMBER(
+        key = "SUNSET_EMBER",
+        displayName = "Sunset Ember",
+        subtitle = "Amber coral, crimson & warm gold",
+        isLight = false
+    ),
+    EMERALD_MATRIX(
+        key = "EMERALD_MATRIX",
+        displayName = "Emerald Matrix",
+        subtitle = "Neon mint, jade & teal glow",
+        isLight = false
+    ),
+    ROSE_GOLD_LUXE(
+        key = "ROSE_GOLD_LUXE",
+        displayName = "Rose Gold Luxe",
+        subtitle = "Blush pearl, berry & violet daylight",
+        isLight = true
+    ),
+    OCEAN_VOLT(
+        key = "OCEAN_VOLT",
+        displayName = "Ocean Volt",
+        subtitle = "Sapphire blue, lime & ultraviolet",
+        isLight = false
     );
 
     companion object {
@@ -238,6 +262,102 @@ val PureAmoledColors = LyraThemeColors(
     onSecondaryButton = Color.White
 )
 
+val SunsetEmberColors = LyraThemeColors(
+    style = AppThemeStyle.SUNSET_EMBER,
+    isLight = false,
+    background = Color(0xFF12080A),
+    surface = Color(0xFF1D0E12),
+    surfaceElevated = Color(0xFF2B141A),
+    glassSurface = Color(0xCC241016),
+    glassBorder = Color(0x66FF7B54),
+    glassBorderPurple = Color(0x66FFB26B),
+    primary = Color(0xFFFF7B54),
+    primaryGlow = Color(0xFFFFB26B),
+    primaryMuted = Color(0xFF9A3412),
+    secondary = Color(0xFFEC4899),
+    secondaryGlow = Color(0xFFF9A8D4),
+    textPrimary = Color(0xFFFFF8F3),
+    textSecondary = Color(0xFFFED7AA),
+    textMuted = Color(0xFFD69E8E),
+    onPrimaryButton = Color.Black,
+    onSecondaryButton = Color.White,
+    acceptColor = Color(0xFF22C55E),
+    declineColor = Color(0xFFF43F5E),
+    priorityColor = Color(0xFFFACC15)
+)
+
+val EmeraldMatrixColors = LyraThemeColors(
+    style = AppThemeStyle.EMERALD_MATRIX,
+    isLight = false,
+    background = Color(0xFF04110D),
+    surface = Color(0xFF0A1D17),
+    surfaceElevated = Color(0xFF102A22),
+    glassSurface = Color(0xCC0D241C),
+    glassBorder = Color(0x5510B981),
+    glassBorderPurple = Color(0x5506B6D4),
+    primary = Color(0xFF10B981),
+    primaryGlow = Color(0xFF6EE7B7),
+    primaryMuted = Color(0xFF065F46),
+    secondary = Color(0xFF06B6D4),
+    secondaryGlow = Color(0xFF67E8F9),
+    textPrimary = Color(0xFFECFDF5),
+    textSecondary = Color(0xFFA7F3D0),
+    textMuted = Color(0xFF6EE7B7),
+    onPrimaryButton = Color.Black,
+    onSecondaryButton = Color.Black,
+    acceptColor = Color(0xFF34D399),
+    declineColor = Color(0xFFFB7185),
+    priorityColor = Color(0xFFFBBF24)
+)
+
+val RoseGoldLuxeColors = LyraThemeColors(
+    style = AppThemeStyle.ROSE_GOLD_LUXE,
+    isLight = true,
+    background = Color(0xFFFDF2F4),
+    surface = Color(0xFFFFFFFF),
+    surfaceElevated = Color(0xFFFCE7EC),
+    glassSurface = Color(0xFFFFFFFF),
+    glassBorder = Color(0xFFF4B6C2),
+    glassBorderPurple = Color(0xFFD8B4FE),
+    primary = Color(0xFFBE185D),
+    primaryGlow = Color(0xFFDB2777),
+    primaryMuted = Color(0xFFFCE7F3),
+    secondary = Color(0xFF7C3AED),
+    secondaryGlow = Color(0xFF8B5CF6),
+    textPrimary = Color(0xFF1F1218),
+    textSecondary = Color(0xFF5B3746),
+    textMuted = Color(0xFF8A6574),
+    onPrimaryButton = Color.White,
+    onSecondaryButton = Color.White,
+    acceptColor = Color(0xFF059669),
+    declineColor = Color(0xFFDC2626),
+    priorityColor = Color(0xFFD97706)
+)
+
+val OceanVoltColors = LyraThemeColors(
+    style = AppThemeStyle.OCEAN_VOLT,
+    isLight = false,
+    background = Color(0xFF050B1A),
+    surface = Color(0xFF0B152E),
+    surfaceElevated = Color(0xFF122147),
+    glassSurface = Color(0xCC0D1A38),
+    glassBorder = Color(0x663B82F6),
+    glassBorderPurple = Color(0x66A3E635),
+    primary = Color(0xFF3B82F6),
+    primaryGlow = Color(0xFF93C5FD),
+    primaryMuted = Color(0xFF1D4ED8),
+    secondary = Color(0xFFA3E635),
+    secondaryGlow = Color(0xFFD9F99D),
+    textPrimary = Color(0xFFF0F9FF),
+    textSecondary = Color(0xFFBAE6FD),
+    textMuted = Color(0xFF7DD3FC),
+    onPrimaryButton = Color.White,
+    onSecondaryButton = Color.Black,
+    acceptColor = Color(0xFF22C55E),
+    declineColor = Color(0xFFEF4444),
+    priorityColor = Color(0xFFF59E0B)
+)
+
 fun themeColorsFor(style: AppThemeStyle): LyraThemeColors = when (style) {
     AppThemeStyle.LYRA_CYBER -> LyraCyberColors
     AppThemeStyle.IOS_GLASS -> IosGlassColors
@@ -245,4 +365,8 @@ fun themeColorsFor(style: AppThemeStyle): LyraThemeColors = when (style) {
     AppThemeStyle.MODERN_POSTER -> ModernPosterColors
     AppThemeStyle.AURORA_PRISM -> AuroraPrismColors
     AppThemeStyle.PURE_AMOLED -> PureAmoledColors
+    AppThemeStyle.SUNSET_EMBER -> SunsetEmberColors
+    AppThemeStyle.EMERALD_MATRIX -> EmeraldMatrixColors
+    AppThemeStyle.ROSE_GOLD_LUXE -> RoseGoldLuxeColors
+    AppThemeStyle.OCEAN_VOLT -> OceanVoltColors
 }

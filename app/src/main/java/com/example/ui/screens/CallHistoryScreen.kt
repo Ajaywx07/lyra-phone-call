@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -158,6 +159,7 @@ fun CallHistoryScreen(
     onNavigateTab: ((String) -> Unit)? = null,
     onOpenContactDetails: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val colors = LyraTheme.colors
     val callList by viewModel.filteredCallLog.collectAsStateWithLifecycle()
     val allCallLogs by viewModel.callLog.collectAsStateWithLifecycle()
@@ -484,6 +486,11 @@ fun CallHistoryScreen(
             onEditClick = {
                 selectedDetailItem = null
                 editingContact = resolvedContact
+            },
+            onWhatsAppClick = {
+                val number = detail.phoneNumber
+                selectedDetailItem = null
+                com.example.utils.ExternalIntentHelper.openWhatsAppChat(context, number)
             },
             onTogglePriorityClick = {
                 viewModel.toggleContactPriority(resolvedContact)

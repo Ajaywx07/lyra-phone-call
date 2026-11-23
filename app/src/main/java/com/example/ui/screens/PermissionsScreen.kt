@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessibilityNew
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
@@ -31,6 +33,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -60,6 +64,7 @@ fun PermissionsScreen(
 ) {
     val context = LocalContext.current
     val perms by viewModel.permissionsState.collectAsStateWithLifecycle()
+    val accessibilityToggleEnabled by viewModel.accessibilityAutomationEnabled.collectAsStateWithLifecycle()
     val colors = LyraTheme.colors
 
     val multiLauncher = rememberLauncherForActivityResult(
@@ -480,6 +485,203 @@ fun PermissionsScreen(
                     singleLauncher.launch(Manifest.permission.SEND_SMS)
                 }
             )
+        }
+
+        item {
+            SectionHeader(title = "Device Protection & Optional Automation")
+        }
+
+        // Device Admin / Uninstall Protection Card
+        item {
+            GlassCard(
+                borderColor = if (perms.deviceAdminActive || perms.deviceOwnerActive) {
+                    colors.acceptColor.copy(alpha = 0.5f)
+                } else {
+                    colors.glassBorder
+                },
+                modifier = Modifier.testTag("device_admin_permission_card")
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = Icons.Default.AdminPanelSettings,
+                                contentDescription = null,
+                                tint = if (perms.deviceAdminActive || perms.deviceOwnerActive) colors.acceptColor else colors.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.device_admin_title),
+                                    color = colors.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = when {
+                                        perms.deviceOwnerActive -> stringResource(R.string.device_owner_active_status)
+                                        perms.deviceAdminActive -> stringResource(R.string.device_admin_active_status)
+                                        else -> stringResource(R.string.device_admin_inactive_status)
+                                    },
+                                    color = if (perms.deviceAdminActive || perms.deviceOwnerActive) colors.acceptColor else colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!perms.deviceAdminActive && !perms.deviceOwnerActive) {
+                            Button(
+                                onClick = {
+                                    runCatching {
+                                        activityResultLauncher.launch(PermissionHelper.createDeviceAdminActivationIntent(context))
+                                    }.onFailure {
+                                        PermissionHelper.openAppSettings(context)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                                shape = CircleShape,
+                                modifier = Modifier.weight(1f).testTag("activate_device_admin_btn")
+                            ) {
+                                Text(
+                                    text = "Activate Protection",
+                                    color = colors.onPrimaryButton,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else if (!perms.deviceOwnerActive) {
+                            OutlinedButton(
+                                onClick = { viewModel.deactivateDeviceAdmin() },
+                                border = BorderStroke(1.dp, colors.declineColor.copy(alpha = 0.5f)),
+                                shape = CircleShape,
+                                modifier = Modifier.weight(1f).testTag("disable_device_admin_btn")
+                            ) {
+                                Text(
+                                    text = "Revoke Admin",
+                                    color = colors.declineColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    activityResultLauncher.launch(PermissionHelper.createSecurityDeviceAdminSettingsIntent())
+                                }.onFailure { PermissionHelper.openAppSettings(context) }
+                            },
+                            border = BorderStroke(1.dp, colors.glassBorder),
+                            shape = CircleShape,
+                            modifier = Modifier.weight(1f).testTag("open_device_admin_settings_btn")
+                        ) {
+                            Text(
+                                text = "Admin Settings",
+                                color = colors.textPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Optional Accessibility Service Card (Strictly Off by Default)
+        item {
+            GlassCard(
+                borderColor = if (accessibilityToggleEnabled && perms.accessibilityEnabled) {
+                    colors.acceptColor.copy(alpha = 0.5f)
+                } else {
+                    colors.glassBorder
+                },
+                modifier = Modifier.testTag("accessibility_service_permission_card")
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f).padding(end = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccessibilityNew,
+                                contentDescription = null,
+                                tint = if (accessibilityToggleEnabled) colors.primary else colors.textMuted,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.accessibility_optional_title),
+                                    color = colors.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (!accessibilityToggleEnabled) {
+                                        stringResource(R.string.accessibility_optional_off_desc)
+                                    } else if (perms.accessibilityEnabled) {
+                                        "Active ✓ Screen-assisted automation permitted."
+                                    } else {
+                                        "Toggle enabled — enable 'Lyra' inside Android Accessibility Settings."
+                                    },
+                                    color = if (accessibilityToggleEnabled && perms.accessibilityEnabled) colors.acceptColor else colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = accessibilityToggleEnabled,
+                            onCheckedChange = { viewModel.setAccessibilityAutomationEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = colors.onPrimaryButton,
+                                checkedTrackColor = colors.primary
+                            ),
+                            modifier = Modifier.testTag("permissions_accessibility_toggle")
+                        )
+                    }
+
+                    if (accessibilityToggleEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    activityResultLauncher.launch(PermissionHelper.createAccessibilitySettingsIntent())
+                                }.onFailure { PermissionHelper.openAppSettings(context) }
+                            },
+                            border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.55f)),
+                            shape = CircleShape,
+                            modifier = Modifier.fillMaxWidth().testTag("open_accessibility_settings_btn")
+                        ) {
+                            Text(
+                                text = "Open System Accessibility Settings",
+                                color = colors.primary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         item {

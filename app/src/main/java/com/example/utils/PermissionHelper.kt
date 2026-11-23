@@ -265,4 +265,86 @@ object PermissionHelper {
         }
         runCatching { context.startActivity(intent) }
     }
+
+    fun getDeviceAdminComponent(context: Context): android.content.ComponentName {
+        return android.content.ComponentName(
+            context.applicationContext,
+            com.example.service.LyraDeviceAdminReceiver::class.java
+        )
+    }
+
+    fun isDeviceAdminActive(context: Context): Boolean {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+            ?: return false
+        return runCatching {
+            dpm.isAdminActive(getDeviceAdminComponent(context))
+        }.getOrDefault(false)
+    }
+
+    fun isDeviceOwner(context: Context): Boolean {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+            ?: return false
+        return runCatching {
+            dpm.isDeviceOwnerApp(context.packageName)
+        }.getOrDefault(false)
+    }
+
+    fun createDeviceAdminActivationIntent(context: Context): Intent {
+        return Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+            putExtra(
+                android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN,
+                getDeviceAdminComponent(context)
+            )
+            putExtra(
+                android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                context.getString(com.example.R.string.device_admin_description)
+            )
+        }
+    }
+
+    fun createSecurityDeviceAdminSettingsIntent(): Intent {
+        return Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    fun removeDeviceAdmin(context: Context): Boolean {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+            ?: return false
+        val admin = getDeviceAdminComponent(context)
+        return runCatching {
+            if (dpm.isAdminActive(admin)) {
+                dpm.removeActiveAdmin(admin)
+                true
+            } else {
+                false
+            }
+        }.getOrDefault(false)
+    }
+
+    fun isAccessibilityServiceEnabled(context: Context): Boolean {
+        if (com.example.service.LyraAccessibilityService.isServiceConnected.value) {
+            return true
+        }
+        val expectedComponent = android.content.ComponentName(
+            context.packageName,
+            com.example.service.LyraAccessibilityService::class.java.name
+        ).flattenToString()
+        val shortComponent = "${context.packageName}/.service.LyraAccessibilityService"
+        val enabledServices = runCatching {
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+        }.getOrNull().orEmpty()
+        if (enabledServices.isBlank()) return false
+        return enabledServices.split(':')
+            .any { it.equals(expectedComponent, ignoreCase = true) || it.equals(shortComponent, ignoreCase = true) }
+    }
+
+    fun createAccessibilitySettingsIntent(): Intent {
+        return Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
 }

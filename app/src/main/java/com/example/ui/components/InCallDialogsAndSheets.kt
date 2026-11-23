@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.BluetoothAudio
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
@@ -1260,4 +1261,168 @@ fun InCallDtmfKeypadDialog(
         },
         containerColor = colors.surfaceElevated
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConferenceParticipantsSheet(
+    participants: List<com.example.service.CallParticipant>,
+    isConferenceMerged: Boolean,
+    onDisconnectParticipant: (String) -> Unit,
+    onToggleHoldParticipant: (String, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LyraTheme.colors
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = colors.surfaceElevated,
+        contentColor = colors.textPrimary,
+        modifier = Modifier.testTag("conference_participants_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Conference Participants (${participants.size})",
+                        color = colors.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isConferenceMerged) "Multi-party conference active" else "Connected callers",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            if (participants.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No active participants",
+                        color = colors.textSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(
+                        items = participants,
+                        key = { it.id }
+                    ) { participant ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("participant_item_${participant.id}"),
+                            color = colors.surface,
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, colors.glassBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.primary.copy(alpha = 0.16f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Groups,
+                                            contentDescription = null,
+                                            tint = colors.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = participant.name,
+                                            color = colors.textPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${participant.number.ifBlank { "Unknown" }} • ${participant.state}",
+                                            color = colors.textSecondary,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    IconButton(
+                                        onClick = { onToggleHoldParticipant(participant.id, !participant.isHolding) },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .testTag("participant_hold_btn_${participant.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = if (participant.isHolding) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                            contentDescription = if (participant.isHolding) "Resume" else "Hold",
+                                            tint = colors.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { onDisconnectParticipant(participant.id) },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .testTag("participant_end_btn_${participant.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CallEnd,
+                                            contentDescription = "End participant call",
+                                            tint = colors.declineColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

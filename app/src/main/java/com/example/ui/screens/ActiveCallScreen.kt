@@ -77,16 +77,19 @@ import coil.request.ImageRequest
 import com.example.R
 import com.example.domain.model.CallScreenStyle
 import com.example.domain.model.CallStateEnum
+import androidx.compose.foundation.clickable
 import com.example.domain.model.CallerInfo
 import com.example.service.CallStateManager
 import com.example.ui.components.AudioRoutePickerDialog
 import com.example.ui.components.CallActionButton
 import com.example.ui.components.CallBackgroundAnimation
+import com.example.ui.components.ConferenceParticipantsSheet
 import com.example.ui.components.FullScreenAddCallOverlay
 import com.example.ui.components.InCallDtmfKeypadDialog
 import com.example.ui.components.InCallMoreOptionsSheet
 import com.example.ui.components.LyraContactAvatar
 import com.example.ui.components.LyraOrb
+import com.example.ui.components.TopIncomingCallBanner
 import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.CrimsonDecline
 import com.example.ui.theme.EmeraldAccept
@@ -133,10 +136,12 @@ fun ActiveCallScreen(
     )
     val activeCaller = caller ?: defaultCaller
 
+    val conferenceParticipants by viewModel.conferenceParticipants.collectAsStateWithLifecycle()
     var showKeypadDialog by remember { mutableStateOf(false) }
     var showMoreSheet by remember { mutableStateOf(false) }
     var showAddCallScreen by remember { mutableStateOf(false) }
     var showAudioRouteMenu by remember { mutableStateOf(false) }
+    var showConferenceParticipantsSheet by remember { mutableStateOf(false) }
     var bgPhotoLoadFailed by remember(activeCaller.photoUri) { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -223,6 +228,23 @@ fun ActiveCallScreen(
             .background(colors.background)
             .testTag("active_call_screen")
     ) {
+        if (callState == CallStateEnum.RINGING) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                TopIncomingCallBanner(
+                    caller = activeCaller,
+                    activeSimLabel = activeSimLabel,
+                    isSilenced = false,
+                    onBannerClick = {},
+                    onAcceptClick = { viewModel.acceptCall() },
+                    onDeclineClick = { viewModel.declineCall() }
+                )
+            }
+        }
         // Dynamic Contact Photo Background (if available) with atmospheric dark scrim
         if (hasBackgroundPhoto) {
             val bgPhotoRequest = remember(activeCaller.photoUri, context) {
@@ -323,7 +345,9 @@ fun ActiveCallScreen(
                                 color = EmeraldAccept.copy(alpha = 0.18f),
                                 shape = CircleShape,
                                 border = BorderStroke(1.dp, EmeraldAccept.copy(alpha = 0.55f)),
-                                modifier = Modifier.testTag("active_call_conference_badge")
+                                modifier = Modifier
+                                    .testTag("active_call_conference_badge")
+                                    .clickable { showConferenceParticipantsSheet = true }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -680,6 +704,16 @@ fun ActiveCallScreen(
         InCallDtmfKeypadDialog(
             onSendDtmf = { digit -> viewModel.sendDtmf(digit) },
             onDismiss = { showKeypadDialog = false }
+        )
+    }
+
+    if (showConferenceParticipantsSheet) {
+        ConferenceParticipantsSheet(
+            participants = conferenceParticipants,
+            isConferenceMerged = isConferenceMerged,
+            onDisconnectParticipant = { viewModel.disconnectParticipant(it) },
+            onToggleHoldParticipant = { id, hold -> viewModel.toggleHoldParticipant(id, hold) },
+            onDismiss = { showConferenceParticipantsSheet = false }
         )
     }
 }

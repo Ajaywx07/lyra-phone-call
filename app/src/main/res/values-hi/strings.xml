@@ -194,4 +194,28 @@
     <string name="recording_delete_message">क्या आप वाकई इस रिकॉर्डिंग को हटाना चाहते हैं?</string>
     <string name="no_recordings_found">अभी तक कोई कॉल रिकॉर्डिंग नहीं है</string>
     <string name="recording_empty_subtitle">कॉल के दौरान बनाई गई रिकॉर्डिंग यहां दिखाई देंगी।</string>
+
+    <!-- सुरक्षा, डिवाइस एडमिन और एक्सेसिबिलिटी -->
+    <string name="device_admin_label">Lyra अनइंस्टॉल सुरक्षा</string>
+    <string name="device_admin_description">सेटिंग्स से बंद किए बिना लॉन्चर से Lyra को अनधिकृत रूप से हटाने से रोकता है।</string>
+    <string name="device_admin_disable_warning">Lyra डिवाइस एडमिन बंद करने पर ऐप अनइंस्टॉल किया जा सकेगा और सुरक्षा हट जाएगी।</string>
+    <string name="accessibility_service_label">Lyra स्मार्ट ऑटोमेशन</string>
+    <string name="accessibility_service_description">वैकल्पिक सहायक जो केवल आपके द्वारा Lyra सेटिंग्स में चालू करने पर टेलीकॉम/USSD संवाद पढ़ और सहायता कर सकता है।</string>
+
+    <!-- कस्टम सुविधाएँ, ऑटो-रिप्लाई और संपर्क क्रियाएँ -->
+    <string name="contacts_most_frequent_title">सर्वाधिक संपर्कित (जुड़ी कॉल्स)</string>
+    <string name="contacts_most_frequent_subtitle">केवल उत्तर दी गई व पूर्ण कॉल्स के आधार पर</string>
+    <string name="action_whatsapp">WhatsApp</string>
+    <string name="ussd_dialog_title">USSD उत्तर</string>
+    <string name="ussd_running_title">USSD कोड चल रहा है</string>
+    <string name="ussd_response_title">कैरियर USSD उत्तर</string>
+    <string name="ussd_error_title">USSD अनुरोध विफल</string>
+    <string name="ussd_running_message">कैरियर कोड %1$s चलाया जा रहा है...</string>
+    <string name="android15_recording_blocked_notice">प्लेटफ़ॉर्म नीति के अनुपालन में Android 15+ (API 35+) पर नेटिव कॉल रिकॉर्डिंग बंद है।</string>
+    <string name="device_admin_title">अनइंस्टॉल सुरक्षा (डिवाइस एडमिन)</string>
+    <string name="device_owner_active_status">डिवाइस ओनर सक्रिय ✓ लॉन्चर से अनइंस्टॉल लॉक है।</string>
+    <string name="device_admin_active_status">डिवाइस एडमिन सक्रिय ✓ लॉन्चर से अनचाहे हटाने से सुरक्षित।</string>
+    <string name="device_admin_inactive_status">डिवाइस एडमिन या डिवाइस ओनर सक्रिय करें ताकि ऐप आसानी से अनइंस्टॉल न हो सके।</string>
+    <string name="accessibility_optional_title">वैकल्पिक एक्सेसिबिलिटी ऑटोमेशन</string>
+    <string name="accessibility_optional_off_desc">डिफ़ॉल्ट रूप से बंद — सामान्य कॉलिंग के लिए बंद रखें, या ऑन-स्क्रीन ऑटोमेशन सहायता के लिए चालू करें।</string>
 </resources>

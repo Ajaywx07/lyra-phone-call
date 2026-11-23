@@ -182,7 +182,7 @@ class LyraFixesAndLocalizationTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithTag("recordings_back_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("top_bar_back_button").assertIsDisplayed()
         composeTestRule.onNodeWithTag("call_recordings_list").assertIsDisplayed()
         composeTestRule.onNodeWithTag("call_recording_item_${insertedId}").assertIsDisplayed()
         composeTestRule.onNodeWithTag("recording_play_btn_${insertedId}").assertIsDisplayed()
