@@ -152,6 +152,7 @@ fun SettingsScreen(
     val monthlyStatsAutoResetEnabled by viewModel.monthlyStatsAutoResetEnabled.collectAsStateWithLifecycle()
     val keypadToneEnabled by viewModel.keypadToneEnabled.collectAsStateWithLifecycle()
     val keypadVoiceAnnouncementEnabled by viewModel.keypadVoiceAnnouncementEnabled.collectAsStateWithLifecycle()
+    val isVoiceChangerEnabled by viewModel.isVoiceChangerEnabled.collectAsStateWithLifecycle()
     val autoReplyMasterEnabled by viewModel.autoReplyMasterEnabled.collectAsStateWithLifecycle()
     val activeAutoReplyMode by viewModel.activeAutoReplyMode.collectAsStateWithLifecycle()
     val accessibilityServiceConnected by viewModel.accessibilityServiceConnected.collectAsStateWithLifecycle()
@@ -432,6 +433,7 @@ fun SettingsScreen(
             // Module 2C: Custom Features & Security Controls
             item(key = "module_custom_features", contentType = "settings_module") {
                 val activeCount = listOf(
+                    isVoiceChangerEnabled,
                     showLyraLogoOnIncoming,
                     showMostFrequentContacts,
                     monthlyStatsAutoResetEnabled,
@@ -445,7 +447,7 @@ fun SettingsScreen(
                 ExpandableSettingsModule(
                     moduleKey = "custom_features",
                     title = "Custom Features & Security",
-                    summary = "Frequent top 20 • Monthly reset • Keypad audio • DND",
+                    summary = "Voice changer • Frequent top 20 • Keypad audio • DND",
                     icon = Icons.Default.Tune,
                     expanded = customFeaturesExpanded,
                     onToggleExpand = { customFeaturesExpanded = !customFeaturesExpanded },
@@ -475,7 +477,9 @@ fun SettingsScreen(
                             runCatching { roleLauncher.launch(intent) }
                                 .onFailure { PermissionHelper.openAppSettings(context) }
                         },
-                        onDeactivateDeviceAdmin = { viewModel.deactivateDeviceAdmin() }
+                        onDeactivateDeviceAdmin = { viewModel.deactivateDeviceAdmin() },
+                        voiceChangerEnabled = isVoiceChangerEnabled,
+                        onVoiceChangerChange = { viewModel.setVoiceChangerEnabled(it) }
                     )
                 }
             }

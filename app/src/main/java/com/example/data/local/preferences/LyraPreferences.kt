@@ -106,6 +106,7 @@ class LyraPreferences(private val context: Context) {
         val KEY_LAST_STATS_RESET_MONTH = stringPreferencesKey("last_stats_reset_month")
         val KEY_KEYPAD_TONE_ENABLED = booleanPreferencesKey("keypad_tone_enabled")
         val KEY_KEYPAD_VOICE_ENABLED = booleanPreferencesKey("keypad_voice_announcement_enabled")
+        val KEY_VOICE_CHANGER_ENABLED = booleanPreferencesKey("voice_changer_enabled")
 
         @Volatile
         private var cachedIncomingSnapshot: IncomingCallSettingsSnapshot? = null
@@ -376,6 +377,10 @@ class LyraPreferences(private val context: Context) {
 
     val keypadVoiceAnnouncementEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_KEYPAD_VOICE_ENABLED] ?: false
+    }
+
+    val isVoiceChangerEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_VOICE_CHANGER_ENABLED] ?: false
     }
 
     suspend fun getIncomingCallSettingsSnapshot(forceRefresh: Boolean = false): IncomingCallSettingsSnapshot {
@@ -688,6 +693,12 @@ class LyraPreferences(private val context: Context) {
     suspend fun setKeypadVoiceAnnouncementEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_KEYPAD_VOICE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setVoiceChangerEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_VOICE_CHANGER_ENABLED] = enabled
         }
     }
 }

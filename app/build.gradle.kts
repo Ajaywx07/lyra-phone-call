@@ -28,6 +28,11 @@ val resolvedVersionCode = providers.gradleProperty("VERSION_CODE")
     .orElse(3)
     .get()
 
+val androidSdkRootPath = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+val hasNativeDspToolchain = androidSdkRootPath != null &&
+    file("$androidSdkRootPath/ndk").listFiles()?.isNotEmpty() == true &&
+    file("$androidSdkRootPath/cmake").listFiles()?.isNotEmpty() == true
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -40,7 +45,27 @@ android {
     versionName = resolvedVersionName
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
 
+    if (hasNativeDspToolchain) {
+      externalNativeBuild {
+        cmake {
+          cppFlags += listOf("-std=c++17", "-O3", "-ffast-math")
+        }
+      }
+      ndk {
+        abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+      }
+    }
+
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
+
+  if (hasNativeDspToolchain) {
+    externalNativeBuild {
+      cmake {
+        path = file("src/main/cpp/CMakeLists.txt")
+        version = "3.22.1"
+      }
+    }
   }
 
   signingConfigs {

@@ -1,7 +1,11 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.telecom.CallAudioState
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -71,10 +75,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.R
+import com.example.audio.VoiceMode
 import com.example.domain.model.CallScreenStyle
 import com.example.domain.model.CallStateEnum
 import androidx.compose.foundation.clickable
@@ -90,6 +96,7 @@ import com.example.ui.components.InCallMoreOptionsSheet
 import com.example.ui.components.LyraContactAvatar
 import com.example.ui.components.LyraOrb
 import com.example.ui.components.TopIncomingCallBanner
+import com.example.ui.components.VoiceChangerPopupDialog
 import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.CrimsonDecline
 import com.example.ui.theme.EmeraldAccept
@@ -126,6 +133,9 @@ fun ActiveCallScreen(
     val showContactPhoto by viewModel.showContactPhotoOnCall.collectAsStateWithLifecycle()
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val isNearEar by CallProximityManager.isNearEar.collectAsStateWithLifecycle()
+    val isVoiceChangerEnabled by viewModel.isVoiceChangerEnabled.collectAsStateWithLifecycle()
+    val activeVoiceMode by viewModel.voiceMode.collectAsStateWithLifecycle()
+    val voiceChangerStatus by viewModel.voiceChangerStatus.collectAsStateWithLifecycle()
 
     val defaultCaller = CallerInfo(
         phoneNumber = "+91 98765 43210",
@@ -143,7 +153,25 @@ fun ActiveCallScreen(
     var showAddCallScreen by remember { mutableStateOf(false) }
     var showAudioRouteMenu by remember { mutableStateOf(false) }
     var showConferenceParticipantsSheet by remember { mutableStateOf(false) }
+    var showVoiceChangerPopup by remember { mutableStateOf(false) }
+    var pendingVoiceModeAfterPermission by remember { mutableStateOf<VoiceMode?>(null) }
     var bgPhotoLoadFailed by remember(activeCaller.photoUri) { mutableStateOf(false) }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val pending = pendingVoiceModeAfterPermission
+        pendingVoiceModeAfterPermission = null
+        if (granted && pending != null) {
+            viewModel.selectVoiceMode(pending)
+        }
+    }
+
+    LaunchedEffect(isVoiceChangerEnabled) {
+        if (!isVoiceChangerEnabled) {
+            showVoiceChangerPopup = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshAudioDeviceAvailability()
@@ -188,7 +216,8 @@ fun ActiveCallScreen(
         !showKeypadDialog &&
         !showMoreSheet &&
         !showAudioRouteMenu &&
-        !showConferenceParticipantsSheet
+        !showConferenceParticipantsSheet &&
+        !showVoiceChangerPopup
 
     BackHandler(
         enabled = onNavigateBackToApp != null &&
@@ -718,7 +747,30 @@ fun ActiveCallScreen(
             onAddCallClick = { showAddCallScreen = true },
             onMergeConference = { viewModel.mergeConferenceCalls() },
             onSelectAudioRoute = { route -> viewModel.selectAudioRoute(route) },
-            onDismiss = { showMoreSheet = false }
+            onDismiss = { showMoreSheet = false },
+            isVoiceChangerEnabled = isVoiceChangerEnabled,
+            activeVoiceMode = activeVoiceMode,
+            onVoiceChangerClick = { showVoiceChangerPopup = true }
+        )
+    }
+
+    if (showVoiceChangerPopup && isVoiceChangerEnabled) {
+        VoiceChangerPopupDialog(
+            activeMode = activeVoiceMode,
+            statusMessage = voiceChangerStatus,
+            onSelectMode = { chosenMode ->
+                val hasMic = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+                viewModel.selectVoiceMode(chosenMode)
+                if (!hasMic && chosenMode != VoiceMode.NONE) {
+                    pendingVoiceModeAfterPermission = chosenMode
+                    runCatching { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+                }
+            },
+            onResetNormal = { viewModel.resetVoiceChangerToNormal() },
+            onDismiss = { showVoiceChangerPopup = false }
         )
     }
 

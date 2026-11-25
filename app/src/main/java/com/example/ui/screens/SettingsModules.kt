@@ -100,12 +100,14 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.local.entity.AutoReplyMode
 import com.example.domain.model.AiProvider
 import com.example.domain.model.CallAnimationStyle
@@ -1438,10 +1440,22 @@ fun CustomFeaturesModuleBody(
     accessibilityServiceConnected: Boolean,
     perms: PermissionsState,
     onLaunchIntent: (Intent) -> Unit,
-    onDeactivateDeviceAdmin: () -> Boolean
+    onDeactivateDeviceAdmin: () -> Boolean,
+    voiceChangerEnabled: Boolean = false,
+    onVoiceChangerChange: (Boolean) -> Unit = {}
 ) {
     val colors = LyraTheme.colors
     Column(modifier = Modifier.fillMaxWidth()) {
+        CapsuleToggle(
+            title = stringResource(R.string.settings_voice_changer_title),
+            subtitle = stringResource(R.string.settings_voice_changer_subtitle),
+            icon = Icons.Default.RecordVoiceOver,
+            checked = voiceChangerEnabled,
+            onCheckedChange = onVoiceChangerChange,
+            accentColor = colors.primary,
+            testTag = "toggle_voice_changer"
+        )
+        CapsuleGroupDivider()
         CapsuleToggle(
             title = "Show Lyra Logo on Incoming Call",
             subtitle = "Display the animated Lyra emblem badge on incoming call screens",

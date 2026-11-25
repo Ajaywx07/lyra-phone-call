@@ -224,4 +224,15 @@
     <string name="device_admin_inactive_status">Activate Device Admin or provision Device Owner so Lyra cannot be easily uninstalled from launcher.</string>
     <string name="accessibility_optional_title">Optional Accessibility Automation</string>
     <string name="accessibility_optional_off_desc">Off by default — keep disabled for standard calling, or turn on to assist with on-screen automation.</string>
+
+    <!-- Real-Time Voice Changer -->
+    <string name="settings_voice_changer_title">Real-Time Voice Changer</string>
+    <string name="settings_voice_changer_subtitle">Show Voice Changer (Male, Female, Robot) inside the in-call More menu</string>
+    <string name="call_more_voice_changer_title">Voice Changer</string>
+    <string name="call_more_voice_changer_subtitle_off">Choose Male, Female, or Robot voice DSP</string>
+    <string name="call_more_voice_changer_subtitle_active">Active: %1$s • Tap to switch or reset</string>
+    <string name="voice_changer_popup_title">Voice Changer</string>
+    <string name="voice_changer_popup_subtitle">Switch real-time voice effect or reset to normal</string>
+    <string name="voice_changer_reset_normal">Normal (Off)</string>
+    <string name="voice_changer_routing_note">Runs low-latency local/VoIP DSP monitor; cellular carrier uplink depends on device modem permissions.</string>
 </resources>

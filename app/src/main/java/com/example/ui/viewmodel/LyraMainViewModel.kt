@@ -15,6 +15,8 @@ import android.os.Looper
 import android.telecom.TelecomManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.VoiceChangerEngine
+import com.example.audio.VoiceMode
 import com.example.data.local.database.LyraDatabase
 import com.example.data.local.entity.AutoReplyMode
 import com.example.data.local.entity.CallNote
@@ -276,6 +278,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     private val voicemailRecorder = AudioRecorderManager(context)
     private val voicemailEngine = VoicemailEngine(context)
     private val dialpadAudioFeedbackManager = DialpadAudioFeedbackManager(context)
+    private val voiceChangerEngine = VoiceChangerEngine(context)
     private val voicemailDao = database.voicemailDao()
     private val scheduledCallDao = database.scheduledCallDao()
     private var voicemailJob: Job? = null
@@ -361,6 +364,13 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
     val keypadVoiceAnnouncementEnabled: StateFlow<Boolean> = customFeatureSettings
         .map { it.keypadVoiceAnnouncementEnabled }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isVoiceChangerEnabled: StateFlow<Boolean> = preferences.isVoiceChangerEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val voiceMode: StateFlow<VoiceMode> = voiceChangerEngine.currentMode
+    val isVoiceChangerPipelineActive: StateFlow<Boolean> = voiceChangerEngine.isPipelineActive
+    val voiceChangerStatus: StateFlow<String?> = voiceChangerEngine.statusMessage
 
     private val _cycleReferenceNowMillis = MutableStateFlow(System.currentTimeMillis())
 
@@ -779,6 +789,13 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
                     dialpadAudioFeedbackManager.warmUpVoice()
                 }
                 checkAndRenewMonthlyCycleIfNeeded()
+            }
+        }
+        viewModelScope.launch {
+            CallStateManager.callState.collect { state ->
+                if (state == CallStateEnum.IDLE || state == CallStateEnum.DISCONNECTED) {
+                    voiceChangerEngine.stopSession(resetMode = true)
+                }
             }
         }
     }
@@ -1384,6 +1401,34 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
             playTone = keypadToneEnabled.value,
             speakDigit = keypadVoiceAnnouncementEnabled.value
         )
+    }
+
+    fun setVoiceChangerEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setVoiceChangerEnabled(enabled)
+        }
+        if (!enabled) {
+            voiceChangerEngine.stopSession(resetMode = true)
+        }
+    }
+
+    fun selectVoiceMode(mode: VoiceMode) {
+        if (!isVoiceChangerEnabled.value) {
+            voiceChangerEngine.stopSession(resetMode = true)
+            return
+        }
+        val nextMode = if (voiceMode.value == mode && mode != VoiceMode.NONE) {
+            VoiceMode.NONE
+        } else {
+            mode
+        }
+        val callOngoing = callState.value == CallStateEnum.DIALING ||
+            callState.value == CallStateEnum.ACTIVE
+        voiceChangerEngine.setMode(nextMode, isCallOngoing = callOngoing)
+    }
+
+    fun resetVoiceChangerToNormal() {
+        voiceChangerEngine.stopSession(resetMode = true)
     }
 
     fun setAutoReplyMasterEnabled(enabled: Boolean) = viewModelScope.launch {
@@ -2009,6 +2054,7 @@ class LyraMainViewModel(application: Application) : AndroidViewModel(application
         voicemailRecorder.cancelRecording()
         voicemailEngine.release()
         dialpadAudioFeedbackManager.release()
+        voiceChangerEngine.release()
         callRecordingPlayer.release()
     }
 }

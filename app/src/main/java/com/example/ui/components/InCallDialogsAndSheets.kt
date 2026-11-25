@@ -45,10 +45,14 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.Man
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Woman
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -95,6 +99,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.audio.VoiceMode
 import com.example.domain.model.ContactItemData
 import com.example.ui.screens.DIAL_KEYS
 import com.example.ui.theme.AmberPriority
@@ -121,7 +126,10 @@ fun InCallMoreOptionsSheet(
     onAddCallClick: () -> Unit,
     onMergeConference: () -> Unit,
     onSelectAudioRoute: (Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isVoiceChangerEnabled: Boolean = false,
+    activeVoiceMode: VoiceMode = VoiceMode.NONE,
+    onVoiceChangerClick: () -> Unit = {}
 ) {
     val colors = LyraTheme.colors
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -215,6 +223,27 @@ fun InCallMoreOptionsSheet(
                 },
                 testTagName = "more_option_add_call"
             )
+
+            // 3B. Real-Time Voice Changer (only rendered when enabled in Settings)
+            if (isVoiceChangerEnabled) {
+                val isEffectActive = activeVoiceMode != VoiceMode.NONE
+                MoreSheetActionRow(
+                    icon = Icons.Default.RecordVoiceOver,
+                    title = stringResource(R.string.call_more_voice_changer_title),
+                    subtitle = if (isEffectActive) {
+                        stringResource(R.string.call_more_voice_changer_subtitle_active, activeVoiceMode.displayName)
+                    } else {
+                        stringResource(R.string.call_more_voice_changer_subtitle_off)
+                    },
+                    accentColor = colors.primary,
+                    isActive = isEffectActive,
+                    onClick = {
+                        onDismiss()
+                        onVoiceChangerClick()
+                    },
+                    testTagName = "more_option_voice_changer"
+                )
+            }
 
             // 4. Audio Route Selector (Earpiece / Speaker / Bluetooth only if actively connected)
             @Suppress("DEPRECATION")
@@ -456,6 +485,160 @@ private data class AudioRouteMenuOption(
     val icon: ImageVector,
     val testTag: String
 )
+
+/**
+ * Compact Voice Changer modal dialog offering Male, Female, and Robot modes,
+ * plus a clean Normal (Off) reset control.
+ */
+@Composable
+fun VoiceChangerPopupDialog(
+    activeMode: VoiceMode,
+    statusMessage: String?,
+    onSelectMode: (VoiceMode) -> Unit,
+    onResetNormal: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LyraTheme.colors
+    val modeOptions = remember {
+        listOf(
+            Triple(VoiceMode.MALE, Icons.Default.Man, "voice_mode_male"),
+            Triple(VoiceMode.FEMALE, Icons.Default.Woman, "voice_mode_female"),
+            Triple(VoiceMode.ROBOT, Icons.Default.SmartToy, "voice_mode_robot")
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("voice_changer_popup"),
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.voice_changer_popup_title),
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 18.sp
+                )
+                Text(
+                    text = stringResource(R.string.voice_changer_popup_subtitle),
+                    color = colors.textSecondary,
+                    fontSize = 12.sp
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                modeOptions.forEach { (mode, icon, tag) ->
+                    val isSelected = activeMode == mode
+                    Surface(
+                        onClick = { onSelectMode(mode) },
+                        shape = CircleShape,
+                        color = if (isSelected) colors.primary.copy(alpha = 0.16f) else colors.background,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isSelected) colors.primary.copy(alpha = 0.75f) else colors.glassBorder
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 56.dp)
+                            .testTag(tag)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) colors.primary.copy(alpha = 0.22f) else colors.surfaceElevated
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = mode.displayName,
+                                        tint = if (isSelected) colors.primary else colors.textSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = mode.displayName,
+                                        color = if (isSelected) colors.primary else colors.textPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = mode.subtitle,
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "${mode.displayName} active",
+                                    tint = colors.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = statusMessage ?: stringResource(R.string.voice_changer_routing_note),
+                    color = colors.textMuted,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .testTag("voice_changer_status_note")
+                )
+            }
+        },
+        dismissButton = {
+            if (activeMode != VoiceMode.NONE) {
+                TextButton(
+                    onClick = onResetNormal,
+                    modifier = Modifier.testTag("voice_mode_reset_normal")
+                ) {
+                    Text(
+                        text = stringResource(R.string.voice_changer_reset_normal),
+                        color = colors.priorityColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("voice_changer_close_btn")
+            ) {
+                Text(
+                    text = stringResource(R.string.action_close),
+                    color = colors.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        containerColor = colors.surfaceElevated,
+        shape = RoundedCornerShape(28.dp)
+    )
+}
 
 /**
  * Full-Screen Add Call / Conference Interface featuring a live Dialpad and Contact Search / Picker.
