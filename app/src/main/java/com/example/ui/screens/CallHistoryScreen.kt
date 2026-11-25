@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhoneCallback
@@ -36,8 +37,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -217,20 +220,22 @@ fun CallHistoryScreen(
         map
     }
 
-    val resolveContactForHistoryItem: (CallHistoryItemData) -> ContactItemData = { item ->
-        val core = PhoneNumberUtils.extractCoreDigits(item.phoneNumber)
-        val fastMatch = if (core.isNotEmpty()) contactsByCore[core] else null
-        val matched = fastMatch ?: contacts.firstOrNull { PhoneNumberUtils.areNumbersEqual(it.phoneNumber, item.phoneNumber) }
-        matched ?: ContactItemData(
-            id = "c_${core.ifBlank { item.id }}",
-            name = item.contactName?.takeIf { it.isNotBlank() } ?: item.phoneNumber,
-            phoneNumber = item.phoneNumber,
-            photoUri = item.photoUri,
-            label = if (item.isOwner) "Owner" else if (item.isPriority) "Priority" else "Recent",
-            isPriority = item.isPriority,
-            isOwner = item.isOwner,
-            isDemoData = item.isDemoData
-        )
+    val resolveContactForHistoryItem: (CallHistoryItemData) -> ContactItemData = remember(contactsByCore, contacts) {
+        { item ->
+            val core = PhoneNumberUtils.extractCoreDigits(item.phoneNumber)
+            val fastMatch = if (core.isNotEmpty()) contactsByCore[core] else null
+            val matched = fastMatch ?: contacts.firstOrNull { PhoneNumberUtils.areNumbersEqual(it.phoneNumber, item.phoneNumber) }
+            matched ?: ContactItemData(
+                id = "c_${core.ifBlank { item.id }}",
+                name = item.contactName?.takeIf { it.isNotBlank() } ?: item.phoneNumber,
+                phoneNumber = item.phoneNumber,
+                photoUri = item.photoUri,
+                label = if (item.isOwner) "Owner" else if (item.isPriority) "Priority" else "Recent",
+                isPriority = item.isPriority,
+                isOwner = item.isOwner,
+                isDemoData = item.isDemoData
+            )
+        }
     }
 
     val startCallWithSimCheck: (String) -> Unit = { number ->
@@ -263,6 +268,9 @@ fun CallHistoryScreen(
     ) {
         LyraAmbientBackdrop()
 
+        val listState = rememberLazyListState()
+        val coroutineScope = rememberCoroutineScope()
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -270,6 +278,7 @@ fun CallHistoryScreen(
                 .testTag("call_history_screen")
         ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -277,7 +286,7 @@ fun CallHistoryScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
+            item(key = "recents_top_bar", contentType = "top_bar") {
                 LyraTopBar(
                     title = stringResource(R.string.recents_title),
                     subtitle = stringResource(R.string.recents_subtitle),
@@ -288,7 +297,7 @@ fun CallHistoryScreen(
             }
 
             if (!perms.callLogAllowed) {
-                item {
+                item(key = "recents_permission_banner", contentType = "banner") {
                     GlassCard(borderColor = AmberPriority.copy(alpha = 0.5f)) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,7 +334,7 @@ fun CallHistoryScreen(
             }
 
             // Pill Search Bar
-            item {
+            item(key = "recents_search_bar", contentType = "search_bar") {
                 CapsuleSearchBar(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
@@ -335,7 +344,7 @@ fun CallHistoryScreen(
             }
 
             // Double-Capsule 4-Filter Selector (All, Incoming, Outgoing, Missed)
-            item {
+            item(key = "recents_filter_bar", contentType = "filter_bar") {
                 CapsuleFilterBar(
                     items = RecentsFilterTab.entries,
                     selectedItem = selectedTab,
@@ -346,7 +355,7 @@ fun CallHistoryScreen(
             }
 
             if (groupedCallsByDate.isEmpty()) {
-                item {
+                item(key = "recents_empty", contentType = "empty_state") {
                     EmptyState(
                         icon = Icons.Default.History,
                         title = "No Calls Found",
@@ -359,7 +368,7 @@ fun CallHistoryScreen(
                 }
             } else {
                 groupedCallsByDate.forEach { dateGroup ->
-                    item(key = "header_${dateGroup.dateKey}") {
+                    item(key = "header_${dateGroup.dateKey}", contentType = "section_header") {
                         SectionHeader(
                             title = "${dateGroup.dateLabel} (${dateGroup.totalCallCount})",
                             modifier = Modifier.testTag("recents_date_header_${dateGroup.dateKey}")
@@ -367,7 +376,8 @@ fun CallHistoryScreen(
                     }
                     items(
                         items = dateGroup.entries,
-                        key = { entry -> "${dateGroup.dateKey}_${entry.representative.id}_${entry.representative.phoneNumber}" }
+                        key = { entry -> "${dateGroup.dateKey}_${entry.representative.id}_${entry.representative.phoneNumber}" },
+                        contentType = { "recent_call_card" }
                     ) { entry ->
                         val representative = entry.representative
                         RecentCallCard(
@@ -386,7 +396,12 @@ fun CallHistoryScreen(
             LyraBottomNavBar(
                 currentRoute = LyraDestinations.CALL_HISTORY,
                 onNavigate = onNavigateTab,
-                unreadMissedCount = unreadMissedCount
+                unreadMissedCount = unreadMissedCount,
+                onReselectTab = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                }
             )
         }
     }

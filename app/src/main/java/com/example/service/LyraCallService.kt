@@ -94,6 +94,7 @@ class LyraCallService : Service() {
         val startTimeMs: Long,
         val isMuted: Boolean,
         val isSpeakerOn: Boolean,
+        val isHold: Boolean,
         val isRingerSilenced: Boolean,
         val isFullScreenUiVisible: Boolean,
         val isAppInForeground: Boolean
@@ -193,7 +194,8 @@ class LyraCallService : Service() {
                     callStartTimeMs = snapshot.startTimeMs,
                     isMuted = snapshot.isMuted,
                     isSpeakerOn = snapshot.isSpeakerOn,
-                    showCallerPhoto = false
+                    showCallerPhoto = false,
+                    isHold = snapshot.isHold
                 )
             }
             CallStateEnum.IDLE,
@@ -209,7 +211,8 @@ class LyraCallService : Service() {
                     callStartTimeMs = 0L,
                     isMuted = false,
                     isSpeakerOn = false,
-                    showCallerPhoto = false
+                    showCallerPhoto = false,
+                    isHold = false
                 )
             }
         }
@@ -235,6 +238,7 @@ class LyraCallService : Service() {
             startTimeMs = CallStateManager.callStartTimeMs.value,
             isMuted = CallStateManager.isMuted.value,
             isSpeakerOn = CallStateManager.isSpeakerOn.value,
+            isHold = CallStateManager.isHold.value,
             isRingerSilenced = CallStateManager.isRingerSilenced.value,
             isFullScreenUiVisible = CallStateManager.isFullScreenIncomingUiVisible.value,
             isAppInForeground = LyraApplication.isAppInForeground
@@ -258,6 +262,7 @@ class LyraCallService : Service() {
                     startTimeMs = startTimeMs,
                     isMuted = muted,
                     isSpeakerOn = speaker,
+                    isHold = CallStateManager.isHold.value,
                     isRingerSilenced = CallStateManager.isRingerSilenced.value,
                     isFullScreenUiVisible = CallStateManager.isFullScreenIncomingUiVisible.value,
                     isAppInForeground = LyraApplication.isAppInForeground
@@ -267,16 +272,18 @@ class LyraCallService : Service() {
                 CallStateManager.isRingerSilenced,
                 CallStateManager.isFullScreenIncomingUiVisible,
                 LyraApplication.isAppInForegroundFlow,
-                CallStateManager.activeSimLabel
-            ) { silenced, fullScreenVisible, inForeground, simLabel ->
-                arrayOf<Any>(silenced, fullScreenVisible, inForeground, simLabel)
+                CallStateManager.activeSimLabel,
+                CallStateManager.isHold
+            ) { silenced, fullScreenVisible, inForeground, simLabel, isHold ->
+                arrayOf<Any>(silenced, fullScreenVisible, inForeground, simLabel, isHold)
             }
             combine(baseFlow, metaFlow) { snap, meta ->
                 snap.copy(
                     isRingerSilenced = meta[0] as Boolean,
                     isFullScreenUiVisible = meta[1] as Boolean,
                     isAppInForeground = meta[2] as Boolean,
-                    simLabel = meta[3] as String
+                    simLabel = meta[3] as String,
+                    isHold = meta[4] as Boolean
                 )
             }.collect { snapshot ->
                 val enableProximity = snapshot.state == CallStateEnum.DIALING ||
@@ -399,7 +406,8 @@ class LyraCallService : Service() {
                     isMuted = snapshot.isMuted,
                     isSpeakerOn = snapshot.isSpeakerOn,
                     showCallerPhoto = showPhoto,
-                    useFullScreenIntent = attachOutgoingFsi
+                    useFullScreenIntent = attachOutgoingFsi,
+                    isHold = snapshot.isHold
                 )
             }
             runCatching {

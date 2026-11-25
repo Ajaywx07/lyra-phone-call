@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -154,14 +155,16 @@ fun ScheduledCallsScreen(
                 .padding(innerPadding)
                 .testTag("scheduled_calls_screen")
         ) {
+            val listState = rememberLazyListState()
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                item {
+                item(key = "scheduled_top_bar", contentType = "top_bar") {
                     LyraTopBar(
                         title = "SCHEDULED CALLS",
                         subtitle = "Automated Outgoing Call Scheduler",
@@ -175,7 +178,7 @@ fun ScheduledCallsScreen(
                     !perms.batteryOptimizationIgnored ||
                     !perms.fullScreenIntentAllowed
                 if (needsReliabilitySetup) {
-                    item {
+                    item(key = "scheduled_permissions_banner", contentType = "banner") {
                         GlassCard(borderColor = AmberPriority.copy(alpha = 0.55f)) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -248,7 +251,7 @@ fun ScheduledCallsScreen(
                     }
                 }
 
-                item {
+                item(key = "scheduled_info_card", contentType = "info_card") {
                     GlassCard(borderColor = colors.glassBorder) {
                         Row(verticalAlignment = Alignment.Top) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = colors.primaryGlow, modifier = Modifier.size(16.dp))
@@ -264,7 +267,7 @@ fun ScheduledCallsScreen(
                 }
 
                 if (scheduledCalls.isEmpty()) {
-                    item {
+                    item(key = "scheduled_empty", contentType = "empty_state") {
                         EmptyState(
                             icon = Icons.Default.Schedule,
                             title = "No Scheduled Calls",
@@ -277,7 +280,11 @@ fun ScheduledCallsScreen(
                         )
                     }
                 } else {
-                    items(scheduledCalls, key = { it.id }) { item ->
+                    items(
+                        items = scheduledCalls,
+                        key = { it.id },
+                        contentType = { "scheduled_call_card" }
+                    ) { item ->
                         val isPriorityContact = remember(contacts, item.phoneNumber) {
                             contacts.any { c ->
                                 (c.isPriority || c.isOwner) &&

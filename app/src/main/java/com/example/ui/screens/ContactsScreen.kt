@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,7 +48,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -137,6 +140,10 @@ fun ContactsScreen(
     ) {
         LyraAmbientBackdrop()
 
+        val listState = rememberLazyListState()
+        val frequentRowState = rememberLazyListState()
+        val coroutineScope = rememberCoroutineScope()
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -144,6 +151,7 @@ fun ContactsScreen(
                 .testTag("contacts_screen")
         ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -151,7 +159,7 @@ fun ContactsScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
+            item(key = "contacts_top_bar", contentType = "top_bar") {
                 LyraTopBar(
                     title = stringResource(R.string.contacts_title),
                     subtitle = stringResource(R.string.contacts_subtitle),
@@ -205,7 +213,7 @@ fun ContactsScreen(
 
             // System Contacts Permission Banner when READ_CONTACTS is not granted
             if (!hasContactsPermission) {
-                item {
+                item(key = "contacts_permission_banner", contentType = "banner") {
                     GlassCard(borderColor = AmberPriority.copy(alpha = 0.5f)) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -244,7 +252,7 @@ fun ContactsScreen(
             }
 
             // Capsule Search Bar
-            item {
+            item(key = "contacts_search_bar", contentType = "search_bar") {
                 CapsuleSearchBar(
                     query = searchQuery,
                     onQueryChange = { contactsViewModel.onSearchQueryChange(it) },
@@ -254,7 +262,7 @@ fun ContactsScreen(
             }
 
             // Double-Capsule Contact Filter Bar
-            item {
+            item(key = "contacts_filter_bar", contentType = "filter_bar") {
                 CapsuleFilterBar(
                     items = ContactFilter.entries,
                     selectedItem = contactsViewModel_selectedFilter,
@@ -267,7 +275,7 @@ fun ContactsScreen(
             // Contact List States
             when (val state = uiState) {
                 is ContactsUiState.Loading -> {
-                    item {
+                    item(key = "contacts_loading", contentType = "state_card") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -288,7 +296,7 @@ fun ContactsScreen(
                 }
 
                 is ContactsUiState.Error -> {
-                    item {
+                    item(key = "contacts_error", contentType = "state_card") {
                         GlassCard(borderColor = CrimsonDecline.copy(alpha = 0.5f)) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -316,33 +324,51 @@ fun ContactsScreen(
                         searchQuery.isBlank() &&
                         contactsViewModel_selectedFilter == ContactFilter.ALL
                     ) {
-                        item(key = "most_frequent_header") {
+                        item(key = "most_frequent_header", contentType = "section_header") {
                             SectionHeader(title = stringResource(R.string.contacts_most_frequent_title))
                         }
-                        item(key = "most_frequent_row") {
+                        item(key = "most_frequent_row", contentType = "frequent_row") {
+                            val contactsByLookup = remember(state.priorityContacts, state.regularContacts) {
+                                val byPhone = HashMap<String, ContactItemData>()
+                                val byName = HashMap<String, ContactItemData>()
+                                for (contact in state.priorityContacts) {
+                                    byPhone.putIfAbsent(contact.phoneNumber, contact)
+                                    byName.putIfAbsent(contact.name.lowercase(), contact)
+                                }
+                                for (contact in state.regularContacts) {
+                                    byPhone.putIfAbsent(contact.phoneNumber, contact)
+                                    byName.putIfAbsent(contact.name.lowercase(), contact)
+                                }
+                                byPhone to byName
+                            }
                             LazyRow(
+                                state = frequentRowState,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(vertical = 2.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("most_frequent_contacts_section")
                             ) {
-                                items(mostFrequentContacts, key = { it.normalizedNumber }) { freq ->
+                                items(
+                                    items = mostFrequentContacts,
+                                    key = { it.normalizedNumber },
+                                    contentType = { "frequent_chip" }
+                                ) { freq ->
                                     MostFrequentContactChipCard(
                                         item = freq,
                                         onCardClick = {
-                                            val matched = (state.priorityContacts + state.regularContacts).firstOrNull {
-                                                it.phoneNumber == freq.phoneNumber ||
-                                                    it.name.equals(freq.displayName, ignoreCase = true)
-                                            } ?: ContactItemData(
-                                                id = "freq_${freq.normalizedNumber}",
-                                                name = freq.displayName,
-                                                phoneNumber = freq.phoneNumber,
-                                                photoUri = freq.photoUri,
-                                                label = "Frequent",
-                                                isPriority = freq.isPriority,
-                                                isOwner = freq.isOwner
-                                            )
+                                            val (byPhone, byName) = contactsByLookup
+                                            val matched = byPhone[freq.phoneNumber]
+                                                ?: byName[freq.displayName.lowercase()]
+                                                ?: ContactItemData(
+                                                    id = "freq_${freq.normalizedNumber}",
+                                                    name = freq.displayName,
+                                                    phoneNumber = freq.phoneNumber,
+                                                    photoUri = freq.photoUri,
+                                                    label = "Frequent",
+                                                    isPriority = freq.isPriority,
+                                                    isOwner = freq.isOwner
+                                                )
                                             mainViewModel.selectContact(matched)
                                             onContactClick(matched)
                                         },
@@ -354,11 +380,15 @@ fun ContactsScreen(
                     }
 
                     if (state.priorityContacts.isNotEmpty()) {
-                        item {
+                        item(key = "priority_header", contentType = "section_header") {
                             SectionHeader(title = "★ Priority & Owner (${state.priorityContacts.size})")
                         }
 
-                        items(state.priorityContacts, key = { "priority_${it.id}_${it.phoneNumber}" }) { contact ->
+                        items(
+                            items = state.priorityContacts,
+                            key = { "priority_${it.id}_${it.phoneNumber}" },
+                            contentType = { "contact_card" }
+                        ) { contact ->
                             ContactCard(
                                 contact = contact,
                                 onContactClick = {
@@ -376,12 +406,16 @@ fun ContactsScreen(
                     }
 
                     if (state.regularContacts.isNotEmpty()) {
-                        item {
+                        item(key = "regular_header", contentType = "section_header") {
                             Spacer(modifier = Modifier.height(4.dp))
                             SectionHeader(title = "System & Directory (${state.regularContacts.size})")
                         }
 
-                        items(state.regularContacts, key = { "regular_${it.id}_${it.phoneNumber}" }) { contact ->
+                        items(
+                            items = state.regularContacts,
+                            key = { "regular_${it.id}_${it.phoneNumber}" },
+                            contentType = { "contact_card" }
+                        ) { contact ->
                             ContactCard(
                                 contact = contact,
                                 onContactClick = {
@@ -399,7 +433,7 @@ fun ContactsScreen(
                     }
 
                     if (state.priorityContacts.isEmpty() && state.regularContacts.isEmpty()) {
-                        item {
+                        item(key = "contacts_empty", contentType = "empty_state") {
                             EmptyState(
                                 icon = Icons.Default.People,
                                 title = "No Contacts Found",
@@ -419,7 +453,12 @@ fun ContactsScreen(
             LyraBottomNavBar(
                 currentRoute = LyraDestinations.CONTACTS,
                 onNavigate = onNavigateTab,
-                unreadMissedCount = unreadMissedCount
+                unreadMissedCount = unreadMissedCount,
+                onReselectTab = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                }
             )
         }
     }

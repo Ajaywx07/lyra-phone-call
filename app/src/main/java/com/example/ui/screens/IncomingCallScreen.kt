@@ -195,8 +195,6 @@ fun IncomingCallScreen(
                             caller = activeCaller.copy(photoUri = callerPhoto),
                             simLabel = activeSimLabel,
                             accentColor = accentColor,
-                            containerColor = themeColors.surfaceElevated.copy(alpha = 0.88f),
-                            borderColor = accentColor.copy(alpha = 0.38f),
                             primaryTextColor = themeColors.textPrimary,
                             secondaryTextColor = themeColors.primaryGlow,
                             showAvatar = true
@@ -254,8 +252,6 @@ fun IncomingCallScreen(
                             caller = activeCaller.copy(photoUri = callerPhoto),
                             simLabel = activeSimLabel,
                             accentColor = Color.White,
-                            containerColor = Color(0xFF1A2232).copy(alpha = 0.86f),
-                            borderColor = Color.White.copy(alpha = 0.22f),
                             primaryTextColor = Color.White,
                             secondaryTextColor = Color(0xFFCBD5E1),
                             showAvatar = true
@@ -390,8 +386,6 @@ fun IncomingCallScreen(
                             caller = activeCaller.copy(photoUri = callerPhoto),
                             simLabel = activeSimLabel,
                             accentColor = themeColors.primary,
-                            containerColor = themeColors.surfaceElevated.copy(alpha = 0.90f),
-                            borderColor = themeColors.glassBorder,
                             primaryTextColor = themeColors.textPrimary,
                             secondaryTextColor = themeColors.primaryGlow,
                             showAvatar = true
@@ -467,8 +461,6 @@ fun IncomingCallScreen(
                             caller = activeCaller.copy(photoUri = callerPhoto),
                             simLabel = activeSimLabel,
                             accentColor = pixelBlue,
-                            containerColor = pixelSurface.copy(alpha = 0.90f),
-                            borderColor = pixelBlue.copy(alpha = 0.38f),
                             primaryTextColor = Color.White,
                             secondaryTextColor = Color(0xFFCBD5E1),
                             showAvatar = true
@@ -761,90 +753,78 @@ private fun ElevatedIncomingCallerCard(
     caller: CallerInfo,
     simLabel: String,
     accentColor: Color,
-    containerColor: Color,
-    borderColor: Color,
     primaryTextColor: Color,
     secondaryTextColor: Color,
     showAvatar: Boolean = true
 ) {
-    Surface(
-        color = containerColor,
-        shape = RoundedCornerShape(28.dp),
-        border = BorderStroke(1.dp, borderColor),
-        shadowElevation = 10.dp,
-        tonalElevation = 4.dp,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("incoming_caller_identity_card")
+            .padding(vertical = 4.dp)
+            .testTag("incoming_caller_identity_card"),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        if (showAvatar) {
+            LyraContactAvatar(
+                name = caller.displayName,
+                photoUri = caller.photoUri,
+                isOwner = caller.isOwner,
+                isPriority = caller.isPriority,
+                size = 92.dp,
+                accentColor = accentColor
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        Text(
+            text = caller.displayName,
+            color = primaryTextColor,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = caller.formattedNumber,
+            color = secondaryTextColor,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        val badgeText = when {
+            caller.isOwner -> "Owner Priority • $simLabel"
+            caller.isPriority -> "VIP Contact • $simLabel"
+            caller.isKnown -> "${caller.contactLabel} • $simLabel"
+            else -> "Unknown Caller • $simLabel"
+        }
+        val badgeTint = when {
+            caller.isOwner || caller.isPriority -> AmberPriority
+            caller.isKnown -> accentColor
+            else -> secondaryTextColor
+        }
+        Surface(
+            color = badgeTint.copy(alpha = 0.14f),
+            shape = CircleShape,
+            border = BorderStroke(1.dp, badgeTint.copy(alpha = 0.42f))
         ) {
-            if (showAvatar) {
-                LyraContactAvatar(
-                    name = caller.displayName,
-                    photoUri = caller.photoUri,
-                    isOwner = caller.isOwner,
-                    isPriority = caller.isPriority,
-                    size = 92.dp,
-                    accentColor = accentColor
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-
             Text(
-                text = caller.displayName,
-                color = primaryTextColor,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
+                text = badgeText,
+                color = badgeTint,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = caller.formattedNumber,
-                color = secondaryTextColor,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.6.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val badgeText = when {
-                caller.isOwner -> "Owner Priority • $simLabel"
-                caller.isPriority -> "VIP Contact • $simLabel"
-                caller.isKnown -> "${caller.contactLabel} • $simLabel"
-                else -> "Unknown Caller • $simLabel"
-            }
-            val badgeTint = when {
-                caller.isOwner || caller.isPriority -> AmberPriority
-                caller.isKnown -> accentColor
-                else -> secondaryTextColor
-            }
-            Surface(
-                color = badgeTint.copy(alpha = 0.14f),
-                shape = CircleShape,
-                border = BorderStroke(1.dp, badgeTint.copy(alpha = 0.42f))
-            ) {
-                Text(
-                    text = badgeText,
-                    color = badgeTint,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            }
         }
     }
 }

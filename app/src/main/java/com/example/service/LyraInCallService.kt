@@ -178,7 +178,10 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         }
         syncCurrentAudioStateToManager()
         startCallForegroundService()
-        if (launchUiIfPermitted && (canBringCallUiToFront() || isAlreadyActive)) {
+        if (launchUiIfPermitted &&
+            !CallStateManager.isUserMinimizedCallUi.value &&
+            (canBringCallUiToFront() || isAlreadyActive)
+        ) {
             launchCallUi("ACTION_OUTGOING_CALL")
         }
 
@@ -355,7 +358,7 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
                     } else {
                         refreshMultiCallState()
                         startCallForegroundService()
-                        if (canBringCallUiToFront()) {
+                        if (canBringCallUiToFront() && !CallStateManager.isUserMinimizedCallUi.value) {
                             launchCallUi("ACTION_OUTGOING_CALL")
                         }
                     }
@@ -366,6 +369,7 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
                 Call.STATE_ACTIVE -> {
                     activeTelecomCall = call ?: resolvePrimaryCall() ?: telecomCall
                     val uiState = CallStateManager.callState.value
+                    val wasRingingOrDialing = uiState == CallStateEnum.RINGING || uiState == CallStateEnum.DIALING
                     if ((uiState == CallStateEnum.IDLE || uiState == CallStateEnum.DISCONNECTED) &&
                         telecomCall != null
                     ) {
@@ -385,8 +389,10 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
                         refreshMultiCallState()
                         syncCurrentAudioStateToManager()
                         startCallForegroundService()
-                        // Always ensure CallActivity opens/re-fronts on real call pickup
-                        launchCallUi("ACTION_OUTGOING_CALL")
+                        // Open CallActivity on pickup/transition unless user explicitly minimized back to app
+                        if (wasRingingOrDialing && !CallStateManager.isUserMinimizedCallUi.value) {
+                            launchCallUi("ACTION_OUTGOING_CALL")
+                        }
                     }
                 }
                 Call.STATE_DISCONNECTED -> {
@@ -462,10 +468,11 @@ class LyraInCallService : InCallService(), TelecomCallBridge {
         if (CallStateManager.callState.value == CallStateEnum.IDLE && !hasLiveCalls()) {
             return
         }
+        CallStateManager.setUserMinimizedCallUi(false)
         val action = if (CallStateManager.callState.value == CallStateEnum.RINGING) {
             "ACTION_INCOMING_CALL"
         } else {
-            "ACTION_OUTGOING_CALL"
+            NotificationHelper.ACTION_RETURN_TO_CALL
         }
         launchCallUi(action)
     }

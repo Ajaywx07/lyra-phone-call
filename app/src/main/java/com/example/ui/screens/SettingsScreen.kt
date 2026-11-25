@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -265,7 +266,10 @@ fun SettingsScreen(
     ) {
         LyraAmbientBackdrop()
 
+        val listState = rememberLazyListState()
+
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
@@ -275,7 +279,7 @@ fun SettingsScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            item {
+            item(key = "settings_top_bar", contentType = "top_bar") {
                 LyraTopBar(
                     title = stringResource(R.string.settings_title),
                     subtitle = stringResource(R.string.settings_subtitle),
@@ -317,7 +321,7 @@ fun SettingsScreen(
             }
 
             // Module 1: Appearance & Dashboard Theme
-            item(key = "module_appearance") {
+            item(key = "module_appearance", contentType = "settings_module") {
                 ExpandableSettingsModule(
                     moduleKey = "appearance",
                     title = "App UI Theme & Header",
@@ -346,7 +350,7 @@ fun SettingsScreen(
             }
 
             // Module 2: Call Screening & Blocker Switches
-            item(key = "module_blocker") {
+            item(key = "module_blocker", contentType = "settings_module") {
                 val activeFilters = (if (blockUnknownCalls) 1 else 0) + (if (blockCommercialPrefixes) 1 else 0)
                 ExpandableSettingsModule(
                     moduleKey = "blocker",
@@ -382,7 +386,7 @@ fun SettingsScreen(
             }
 
             // Module 2B: Auto-Reply Status Modes (24 Pre-Fed Modes + Custom SMS)
-            item(key = "module_auto_reply_modes") {
+            item(key = "module_auto_reply_modes", contentType = "settings_module") {
                 val selectedModeId = customFeatureSettings.activeAutoReplyModeId.ifBlank {
                     autoReplyModes.firstOrNull()?.modeId ?: "driving"
                 }
@@ -426,7 +430,7 @@ fun SettingsScreen(
             }
 
             // Module 2C: Custom Features & Security Controls
-            item(key = "module_custom_features") {
+            item(key = "module_custom_features", contentType = "settings_module") {
                 val activeCount = listOf(
                     showLyraLogoOnIncoming,
                     showMostFrequentContacts,
@@ -477,7 +481,7 @@ fun SettingsScreen(
             }
 
             // Module 3: AI Provider & Voicemail Engine (Modular Collapsible Box)
-            item(key = "module_ai_engine") {
+            item(key = "module_ai_engine", contentType = "settings_module") {
                 val keyBadge = when {
                     draftApiKey.isNotBlank() || persistedAiSettings.apiKey.isNotBlank() -> "Key Set"
                     draftProvider == AiProvider.FIREBASE_AI -> "Managed"
@@ -542,7 +546,7 @@ fun SettingsScreen(
             }
 
             // Module 4: Call Screen Style & Animations (Modular Collapsible Box)
-            item(key = "module_call_screen") {
+            item(key = "module_call_screen", contentType = "settings_module") {
                 ExpandableSettingsModule(
                     moduleKey = "call_screen",
                     title = "Call Screen Style & Animations",
@@ -577,7 +581,7 @@ fun SettingsScreen(
             }
 
             // Module 5: Dual-SIM, Telecom Roles & Call Alerts
-            item(key = "module_calling_alerts") {
+            item(key = "module_calling_alerts", contentType = "settings_module") {
                 val simLabel = if (preferredSim == SimManager.SIM_ASK) "Ask SIM" else preferredSim.replace("_", " ")
                 ExpandableSettingsModule(
                     moduleKey = "calling_alerts",
@@ -626,7 +630,7 @@ fun SettingsScreen(
             }
 
             // Module 6: Assistant Behavior & Local Privacy
-            item(key = "module_assistant_privacy") {
+            item(key = "module_assistant_privacy", contentType = "settings_module") {
                 ExpandableSettingsModule(
                     moduleKey = "assistant_privacy",
                     title = "Assistant Behavior & Local Privacy",
@@ -716,7 +720,7 @@ fun SettingsScreen(
             }
 
             // Module 7: Owner Profile & Cloud Backup
-            item(key = "module_owner_backup") {
+            item(key = "module_owner_backup", contentType = "settings_module") {
                 ExpandableSettingsModule(
                     moduleKey = "owner_backup",
                     title = "Owner Profile & Cloud Backup",
@@ -900,7 +904,7 @@ fun SettingsScreen(
             }
 
             // Compact About Lyra Footer
-            item(key = "about_footer") {
+            item(key = "about_footer", contentType = "footer") {
                 GlassCard(
                     modifier = Modifier.testTag("about_card"),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)

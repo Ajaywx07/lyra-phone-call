@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -48,7 +49,9 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.navigation.LyraDestinations
 import com.example.ui.theme.CrimsonDecline
+import com.example.ui.theme.LyraMotion
 import com.example.ui.theme.LyraTheme
+import com.example.ui.theme.rememberAnimationsEnabled
 
 sealed class BottomNavItem(
     val route: String,
@@ -100,12 +103,15 @@ fun LyraBottomNavBar(
     onReselectTab: ((String) -> Unit)? = null
 ) {
     val colors = LyraTheme.colors
-    val items = listOf(
-        BottomNavItem.Keypad,
-        BottomNavItem.Recents,
-        BottomNavItem.Contacts,
-        BottomNavItem.LyraAI
-    )
+    val animationsEnabled = rememberAnimationsEnabled()
+    val items = remember {
+        listOf(
+            BottomNavItem.Keypad,
+            BottomNavItem.Recents,
+            BottomNavItem.Contacts,
+            BottomNavItem.LyraAI
+        )
+    }
 
     Box(
         modifier = modifier
@@ -146,7 +152,7 @@ fun LyraBottomNavBar(
                             isSelected -> colors.primary.copy(alpha = 0.20f)
                             else -> Color.Transparent
                         },
-                        animationSpec = tween(110, easing = FastOutSlowInEasing),
+                        animationSpec = LyraMotion.calmTween(160, animationsEnabled),
                         label = "nav_capsule_bg"
                     )
                     val innerBorder by animateColorAsState(
@@ -155,7 +161,7 @@ fun LyraBottomNavBar(
                             isSelected -> colors.primary.copy(alpha = 0.50f)
                             else -> Color.Transparent
                         },
-                        animationSpec = tween(110, easing = FastOutSlowInEasing),
+                        animationSpec = LyraMotion.calmTween(160, animationsEnabled),
                         label = "nav_capsule_border"
                     )
                     val contentTint by animateColorAsState(
@@ -164,7 +170,7 @@ fun LyraBottomNavBar(
                         } else {
                             colors.textMuted
                         },
-                        animationSpec = tween(110, easing = FastOutSlowInEasing),
+                        animationSpec = LyraMotion.calmTween(160, animationsEnabled),
                         label = "nav_capsule_tint"
                     )
 

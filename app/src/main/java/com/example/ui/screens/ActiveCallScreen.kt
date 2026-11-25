@@ -102,7 +102,8 @@ import kotlinx.coroutines.delay
 fun ActiveCallScreen(
     viewModel: LyraMainViewModel,
     onEndCall: () -> Unit,
-    onCancelCall: () -> Unit = onEndCall
+    onCancelCall: () -> Unit = onEndCall,
+    onNavigateBackToApp: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val colors = LyraTheme.colors
@@ -183,8 +184,29 @@ fun ActiveCallScreen(
         }
     }
 
+    val noModalOverlayOpen = !showAddCallScreen &&
+        !showKeypadDialog &&
+        !showMoreSheet &&
+        !showAudioRouteMenu &&
+        !showConferenceParticipantsSheet
+
     BackHandler(
-        enabled = (callState == CallStateEnum.DIALING || callState == CallStateEnum.IDLE) && !showAddCallScreen
+        enabled = onNavigateBackToApp != null &&
+            (isCallOngoing || callState == CallStateEnum.IDLE) &&
+            noModalOverlayOpen
+    ) {
+        if (isCallOngoing) {
+            CallStateManager.setUserMinimizedCallUi(true)
+            onNavigateBackToApp?.invoke()
+        } else {
+            onCancelCall()
+        }
+    }
+
+    BackHandler(
+        enabled = onNavigateBackToApp == null &&
+            (callState == CallStateEnum.DIALING || callState == CallStateEnum.IDLE) &&
+            !showAddCallScreen
     ) {
         viewModel.cancelDialingCall()
         onCancelCall()

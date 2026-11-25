@@ -101,6 +101,13 @@ object CallStateManager {
         _isFullScreenIncomingUiVisible.value = visible
     }
 
+    private val _isUserMinimizedCallUi = MutableStateFlow(false)
+    val isUserMinimizedCallUi: StateFlow<Boolean> = _isUserMinimizedCallUi.asStateFlow()
+
+    fun setUserMinimizedCallUi(minimized: Boolean) {
+        _isUserMinimizedCallUi.value = minimized
+    }
+
     @Suppress("DEPRECATION")
     private val _currentAudioRoute = MutableStateFlow(CallAudioState.ROUTE_EARPIECE)
     val currentAudioRoute: StateFlow<Int> = _currentAudioRoute.asStateFlow()
@@ -207,6 +214,7 @@ object CallStateManager {
         _isRingerSilenced.value = false
         _isSimulatedCall.value = isSimulated
         _isFullScreenIncomingUiVisible.value = false
+        _isUserMinimizedCallUi.value = false
         _conferenceParticipantCount.value = 1
         _canMergeConference.value = false
         _isConferenceMerged.value = false
@@ -243,6 +251,7 @@ object CallStateManager {
         _isRingerSilenced.value = false
         _isSimulatedCall.value = isSimulated
         _isFullScreenIncomingUiVisible.value = false
+        _isUserMinimizedCallUi.value = false
         _conferenceParticipantCount.value = 1
         _canMergeConference.value = false
         _isConferenceMerged.value = false
@@ -283,6 +292,7 @@ object CallStateManager {
     }
 
     fun acceptActiveCall() {
+        _isUserMinimizedCallUi.value = false
         val bridge = telecomBridge
         bridge?.answerCall()
         onCallAnswered()
@@ -297,6 +307,7 @@ object CallStateManager {
     @Suppress("DEPRECATION")
     fun routeToVoicemail() {
         timerJob?.cancel()
+        _isUserMinimizedCallUi.value = false
         if (_callState.value == CallStateEnum.RINGING) {
             telecomBridge?.answerCall()
         }
@@ -597,6 +608,7 @@ object CallStateManager {
         _isRingerSilenced.value = false
         _isSimulatedCall.value = false
         _isFullScreenIncomingUiVisible.value = false
+        _isUserMinimizedCallUi.value = false
         hasTelecomAudioState = false
         _currentAudioRoute.value = CallAudioState.ROUTE_EARPIECE
         _supportedAudioRoutes.value = CallAudioState.ROUTE_EARPIECE or CallAudioState.ROUTE_SPEAKER

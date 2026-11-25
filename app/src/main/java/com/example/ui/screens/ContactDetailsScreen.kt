@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -154,7 +155,10 @@ fun ContactDetailsScreen(
     ) {
         LyraAmbientBackdrop()
 
+        val listState = rememberLazyListState()
+
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
@@ -165,7 +169,7 @@ fun ContactDetailsScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-        item {
+        item(key = "details_top_bar", contentType = "top_bar") {
             LyraTopBar(
                 title = "CONTACT PROFILE",
                 subtitle = "Lyra Intelligence File",
@@ -187,7 +191,7 @@ fun ContactDetailsScreen(
         }
 
         // Profile Card
-        item {
+        item(key = "details_profile_card", contentType = "profile_card") {
             GlassCard(contentPadding = PaddingValues(20.dp)) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -334,7 +338,7 @@ fun ContactDetailsScreen(
         }
 
         // Assistant Behavior Rules for Contact
-        item {
+        item(key = "details_assistant_rules", contentType = "settings_group") {
             SectionHeader(title = "Lyra Assistant Rules")
 
             CapsuleSettingsGroup {
@@ -358,7 +362,7 @@ fun ContactDetailsScreen(
         }
 
         // Complete Call History for this number (newest to oldest, no date restriction)
-        item {
+        item(key = "details_history_header", contentType = "section_header") {
             SectionHeader(
                 title = "Call History (${contactCallHistory.size})",
                 modifier = Modifier.testTag("contact_details_call_history_section")
@@ -366,7 +370,7 @@ fun ContactDetailsScreen(
         }
 
         if (contactCallHistory.isEmpty()) {
-            item {
+            item(key = "details_history_empty", contentType = "empty_card") {
                 GlassCard {
                     Text(
                         text = "No recorded calls for ${contact.phoneNumber} yet.",
@@ -376,7 +380,11 @@ fun ContactDetailsScreen(
                 }
             }
         } else {
-            items(contactCallHistory, key = { "detail_call_${it.id}_${it.timestamp}" }) { entry ->
+            items(
+                items = contactCallHistory,
+                key = { "detail_call_${it.id}_${it.timestamp}" },
+                contentType = { "history_row" }
+            ) { entry ->
                 val (typeIcon, typeColor, typeLabel) = when (entry.callType) {
                     CallTypeEnum.INCOMING -> Triple(Icons.Default.CallReceived, EmeraldAccept, "Incoming")
                     CallTypeEnum.OUTGOING -> Triple(Icons.Default.CallMade, colors.primary, "Outgoing")
@@ -476,7 +484,7 @@ fun ContactDetailsScreen(
         }
 
         // Notes History with this Contact
-        item {
+        item(key = "details_notes_header", contentType = "section_header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -501,7 +509,7 @@ fun ContactDetailsScreen(
         }
 
         if (contactNotes.isEmpty()) {
-            item {
+            item(key = "details_notes_empty", contentType = "empty_card") {
                 GlassCard {
                     Text(
                         text = "No notes recorded for this contact yet.\nTap 'Add Note' or take notes during an active call.",
@@ -511,7 +519,11 @@ fun ContactDetailsScreen(
                 }
             }
         } else {
-            items(contactNotes, key = { it.id }) { note ->
+            items(
+                items = contactNotes,
+                key = { it.id },
+                contentType = { "note_card" }
+            ) { note ->
                 GlassCard(
                     borderColor = colors.glassBorder,
                     contentPadding = PaddingValues(12.dp)

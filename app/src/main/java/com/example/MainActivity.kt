@@ -9,22 +9,51 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Voicemail
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -39,8 +68,12 @@ import com.example.service.NotificationHelper
 import com.example.service.ScheduledCallScheduler
 import com.example.ui.components.TopIncomingCallBanner
 import com.example.ui.components.UpdateAvailableDialog
+import com.example.ui.theme.AmberPriority
+import com.example.ui.theme.EmeraldAccept
+import com.example.ui.theme.LyraMotion
 import com.example.ui.theme.LyraTheme
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.rememberAnimationsEnabled
 import com.example.ui.viewmodel.LyraMainViewModel
 import com.example.utils.PermissionHelper
 import com.example.utils.configureAppCheck
@@ -83,9 +116,12 @@ class MainActivity : ComponentActivity() {
                 val isRingerSilenced by viewModel.isRingerSilenced.collectAsStateWithLifecycle()
                 val showContactPhoto by viewModel.showContactPhotoOnCall.collectAsStateWithLifecycle()
                 val isSimulatedCall by viewModel.isSimulatedCall.collectAsStateWithLifecycle()
+                val isHold by viewModel.isHold.collectAsStateWithLifecycle()
+                val durationSeconds by viewModel.callDurationSeconds.collectAsStateWithLifecycle()
                 val isFullScreenIncomingUiVisible by CallStateManager.isFullScreenIncomingUiVisible.collectAsStateWithLifecycle()
                 val availableUpdate by viewModel.availableUpdate.collectAsStateWithLifecycle()
                 val previousCallState = remember { mutableStateOf(liveCallState) }
+                val animationsEnabled = rememberAnimationsEnabled()
 
                 LaunchedEffect(Unit) {
                     viewModel.checkForAppUpdatesIfStartupPending()
@@ -97,7 +133,7 @@ class MainActivity : ComponentActivity() {
                     latestIntentState.value = null
                 }
 
-                // Keep in-app call screens synchronized without auto-opening full-screen UI when unlocked
+                // Keep in-app call screens synchronized cleanly on call termination without hijacking app navigation
                 LaunchedEffect(liveCallState, isSimulatedCall) {
                     val prev = previousCallState.value
                     previousCallState.value = liveCallState
@@ -122,31 +158,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        CallStateEnum.DIALING, CallStateEnum.ACTIVE -> {
-                            if (routeNow != LyraDestinations.ACTIVE_CALL &&
-                                routeNow != LyraDestinations.VOICEMAIL
-                            ) {
-                                runCatching {
-                                    navController.navigate(LyraDestinations.ACTIVE_CALL) {
-                                        if (routeNow == LyraDestinations.INCOMING_CALL) {
-                                            popUpTo(LyraDestinations.INCOMING_CALL) { inclusive = true }
-                                        }
-                                        launchSingleTop = true
-                                    }
-                                }
-                            }
-                        }
+                        CallStateEnum.DIALING,
+                        CallStateEnum.ACTIVE,
                         CallStateEnum.VOICEMAIL -> {
-                            if (routeNow != LyraDestinations.VOICEMAIL) {
-                                runCatching {
-                                    navController.navigate(LyraDestinations.VOICEMAIL) {
-                                        if (routeNow == LyraDestinations.INCOMING_CALL) {
-                                            popUpTo(LyraDestinations.INCOMING_CALL) { inclusive = true }
-                                        }
-                                        launchSingleTop = true
-                                    }
-                                }
-                            }
+                            // Never force-navigate away from normal app screens during an active call.
                         }
                         CallStateEnum.DISCONNECTED -> {
                             if (routeNow == LyraDestinations.INCOMING_CALL ||
@@ -188,16 +203,86 @@ class MainActivity : ComponentActivity() {
                     currentRoute != LyraDestinations.INCOMING_CALL &&
                     currentRoute != LyraDestinations.VOICEMAIL
 
+                val isOngoingCallInApp = liveCallState == CallStateEnum.DIALING ||
+                    liveCallState == CallStateEnum.ACTIVE ||
+                    liveCallState == CallStateEnum.VOICEMAIL
+                val isOnDedicatedCallRoute = currentRoute == LyraDestinations.ACTIVE_CALL ||
+                    currentRoute == LyraDestinations.INCOMING_CALL ||
+                    currentRoute == LyraDestinations.VOICEMAIL ||
+                    currentRoute == LyraDestinations.CALL_SUMMARY
+                val showReturnToCallBanner = isOngoingCallInApp &&
+                    !isOnDedicatedCallRoute &&
+                    !showTopIncomingBanner
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = LyraTheme.colors.background
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        LyraNavGraph(
-                            navController = navController,
-                            viewModel = viewModel,
-                            startDestination = initialDestination
-                        )
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            AnimatedVisibility(
+                                visible = showReturnToCallBanner,
+                                enter = expandVertically(LyraMotion.calmTween(220, animationsEnabled)) +
+                                    fadeIn(LyraMotion.calmTween(180, animationsEnabled)),
+                                exit = shrinkVertically(LyraMotion.calmTween(180, animationsEnabled)) +
+                                    fadeOut(LyraMotion.calmTween(140, animationsEnabled))
+                            ) {
+                                @OptIn(ExperimentalLayoutApi::class)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(LyraTheme.colors.background)
+                                        .statusBarsPadding()
+                                        .consumeWindowInsets(WindowInsets.statusBars)
+                                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    ReturnToCallBar(
+                                        callerName = currentCaller?.displayName
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: currentCaller?.formattedNumber
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: currentCaller?.phoneNumber
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: "Active Call",
+                                        callState = liveCallState,
+                                        isHold = isHold,
+                                        durationSeconds = durationSeconds,
+                                        activeSimLabel = activeSimLabel,
+                                        onClick = {
+                                            CallStateManager.setUserMinimizedCallUi(false)
+                                            if (!isSimulatedCall && CallStateManager.hasTelecomBridge()) {
+                                                val action = if (liveCallState == CallStateEnum.VOICEMAIL) {
+                                                    "ACTION_VOICEMAIL"
+                                                } else {
+                                                    NotificationHelper.ACTION_RETURN_TO_CALL
+                                                }
+                                                NotificationHelper.launchCallActivity(this@MainActivity, action)
+                                            } else {
+                                                val targetRoute = if (liveCallState == CallStateEnum.VOICEMAIL) {
+                                                    LyraDestinations.VOICEMAIL
+                                                } else {
+                                                    LyraDestinations.ACTIVE_CALL
+                                                }
+                                                runCatching {
+                                                    navController.navigate(targetRoute) {
+                                                        launchSingleTop = true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            LyraNavGraph(
+                                navController = navController,
+                                viewModel = viewModel,
+                                startDestination = initialDestination,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                            )
+                        }
 
                         AnimatedVisibility(
                             visible = showTopIncomingBanner,
@@ -288,24 +373,30 @@ class MainActivity : ComponentActivity() {
 
     internal fun resolveStartDestination(launchIntent: Intent?): String {
         val callState = CallStateManager.callState.value
+        val action = launchIntent?.action
         if (callState == CallStateEnum.RINGING &&
-            (launchIntent?.action == "ACTION_INCOMING_CALL" ||
+            (action == "ACTION_INCOMING_CALL" ||
                 NotificationHelper.isDeviceLockedOrScreenOff(this))
         ) {
             return LyraDestinations.INCOMING_CALL
         }
-        if (callState == CallStateEnum.VOICEMAIL) return LyraDestinations.VOICEMAIL
-        if (callState == CallStateEnum.DIALING || callState == CallStateEnum.ACTIVE) {
-            return LyraDestinations.ACTIVE_CALL
-        }
-        if (launchIntent?.action == NotificationHelper.ACTION_OPEN_RECENTS ||
+        if (action == NotificationHelper.ACTION_OPEN_RECENTS ||
             launchIntent?.getStringExtra(NotificationHelper.EXTRA_NAVIGATE_ROUTE) == LyraDestinations.CALL_HISTORY
         ) {
             return LyraDestinations.CALL_HISTORY
         }
-        return when (launchIntent?.action) {
+        return when (action) {
             "ACTION_INCOMING_CALL" -> LyraDestinations.INCOMING_CALL
-            "ACTION_OUTGOING_CALL", "ACTION_ACCEPT_CALL" -> LyraDestinations.ACTIVE_CALL
+            NotificationHelper.ACTION_RETURN_TO_CALL,
+            "ACTION_OUTGOING_CALL",
+            "ACTION_ACCEPT_CALL" -> when {
+                callState == CallStateEnum.VOICEMAIL -> LyraDestinations.VOICEMAIL
+                callState == CallStateEnum.DIALING ||
+                    callState == CallStateEnum.ACTIVE ||
+                    action == "ACTION_ACCEPT_CALL" -> LyraDestinations.ACTIVE_CALL
+                else -> LyraDestinations.DIALER
+            }
+            "ACTION_VOICEMAIL" -> LyraDestinations.VOICEMAIL
             ScheduledCallScheduler.ACTION_OPEN_SCHEDULED_CALLS -> LyraDestinations.SCHEDULED_CALLS
             Intent.ACTION_DIAL, Intent.ACTION_CALL, Intent.ACTION_VIEW -> LyraDestinations.DIALER
             else -> LyraDestinations.DIALER
@@ -336,14 +427,33 @@ class MainActivity : ComponentActivity() {
                         launchSingleTop = true
                     }
                 }
+                NotificationHelper.ACTION_RETURN_TO_CALL,
                 "ACTION_OUTGOING_CALL" -> {
+                    CallStateManager.setUserMinimizedCallUi(false)
+                    when (CallStateManager.callState.value) {
+                        CallStateEnum.VOICEMAIL -> {
+                            navController.navigate(LyraDestinations.VOICEMAIL) {
+                                launchSingleTop = true
+                            }
+                        }
+                        CallStateEnum.DIALING, CallStateEnum.ACTIVE -> {
+                            navController.navigate(LyraDestinations.ACTIVE_CALL) {
+                                launchSingleTop = true
+                            }
+                        }
+                        else -> Unit
+                    }
+                }
+                "ACTION_VOICEMAIL" -> {
+                    CallStateManager.setUserMinimizedCallUi(false)
                     if (CallStateManager.callState.value != CallStateEnum.IDLE) {
-                        navController.navigate(LyraDestinations.ACTIVE_CALL) {
+                        navController.navigate(LyraDestinations.VOICEMAIL) {
                             launchSingleTop = true
                         }
                     }
                 }
                 "ACTION_ACCEPT_CALL" -> {
+                    CallStateManager.setUserMinimizedCallUi(false)
                     viewModel.acceptCall()
                     navController.navigate(LyraDestinations.ACTIVE_CALL) {
                         launchSingleTop = true
@@ -385,3 +495,108 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+@Composable
+private fun ReturnToCallBar(
+    callerName: String,
+    callState: CallStateEnum,
+    isHold: Boolean,
+    durationSeconds: Long,
+    activeSimLabel: String,
+    onClick: () -> Unit
+) {
+    val colors = LyraTheme.colors
+    val minutes = durationSeconds / 60
+    val seconds = durationSeconds % 60
+    val formattedDuration = remember(minutes, seconds) {
+        String.format("%02d:%02d", minutes, seconds)
+    }
+    val accent = when {
+        isHold || callState == CallStateEnum.DIALING -> AmberPriority
+        callState == CallStateEnum.VOICEMAIL -> colors.primary
+        else -> EmeraldAccept
+    }
+    val statusText = when {
+        isHold -> "${stringResource(R.string.ongoing_call_status_hold)} • $formattedDuration"
+        callState == CallStateEnum.DIALING -> "${stringResource(R.string.ongoing_call_status_dialing)} • $activeSimLabel"
+        callState == CallStateEnum.VOICEMAIL -> stringResource(R.string.ongoing_call_status_voicemail)
+        else -> "${stringResource(R.string.ongoing_call_status_active)} • $formattedDuration"
+    }
+    val returnLabel = stringResource(R.string.return_to_call_action)
+
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = accent.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.55f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag("return_to_call_banner")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = accent.copy(alpha = 0.22f),
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = when {
+                                isHold -> Icons.Default.Pause
+                                callState == CallStateEnum.VOICEMAIL -> Icons.Default.Voicemail
+                                else -> Icons.Default.Call
+                            },
+                            contentDescription = returnLabel,
+                            tint = accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = callerName,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = statusText,
+                        color = accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Surface(
+                shape = CircleShape,
+                color = accent
+            ) {
+                Text(
+                    text = returnLabel,
+                    color = if (isHold || callState == CallStateEnum.DIALING) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+

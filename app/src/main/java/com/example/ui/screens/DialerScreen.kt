@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -124,7 +125,9 @@ import com.example.ui.components.SimChooserDialog
 import com.example.ui.components.shouldPromptForSim
 import com.example.ui.theme.AmberPriority
 import com.example.ui.theme.EmeraldAccept
+import com.example.ui.theme.LyraMotion
 import com.example.ui.theme.LyraTheme
+import com.example.ui.theme.rememberAnimationsEnabled
 import com.example.ui.viewmodel.LyraMainViewModel
 import com.example.utils.PhoneNumberUtils
 import com.example.utils.SimManager
@@ -428,6 +431,8 @@ fun DialerScreen(
     var showSimChooserDialog by rememberSaveable { mutableStateOf(false) }
     var pendingCallNumber by rememberSaveable { mutableStateOf("") }
     var isSuggestionsExpanded by rememberSaveable { mutableStateOf(false) }
+    val suggestionsListState = rememberLazyListState()
+    val animationsEnabled = rememberAnimationsEnabled()
 
     BackHandler(enabled = isSuggestionsExpanded) {
         isSuggestionsExpanded = false
@@ -742,6 +747,7 @@ fun DialerScreen(
                                 }
                             } else {
                                 LazyColumn(
+                                    state = suggestionsListState,
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxWidth()
@@ -750,14 +756,21 @@ fun DialerScreen(
                                     contentPadding = PaddingValues(bottom = 14.dp)
                                 ) {
                                     if (isShowingMostFrequent) {
-                                        item(key = "dialer_most_frequent_header") {
+                                        item(
+                                            key = "dialer_most_frequent_header",
+                                            contentType = "section_header"
+                                        ) {
                                             SectionHeader(
                                                 title = "Most Frequent (${matchingSuggestions.size}/20)",
                                                 modifier = Modifier.testTag("dialer_most_frequent_header")
                                             )
                                         }
                                     }
-                                    items(matchingSuggestions, key = { it.id }) { suggestion ->
+                                    items(
+                                        items = matchingSuggestions,
+                                        key = { it.id },
+                                        contentType = { "dialer_suggestion" }
+                                    ) { suggestion ->
                                         ExpandedSuggestionRow(
                                             suggestion = suggestion,
                                             onSelect = {
@@ -896,13 +909,13 @@ fun DialerScreen(
                 androidx.compose.animation.AnimatedVisibility(
                     visible = !isSuggestionsExpanded,
                     enter = slideInVertically(
-                        animationSpec = tween(170, easing = FastOutSlowInEasing),
+                        animationSpec = LyraMotion.calmTween(190, animationsEnabled),
                         initialOffsetY = { it }
-                    ) + fadeIn(tween(130)),
+                    ) + fadeIn(LyraMotion.calmTween(150, animationsEnabled)),
                     exit = slideOutVertically(
-                        animationSpec = tween(150, easing = FastOutSlowInEasing),
+                        animationSpec = LyraMotion.calmTween(160, animationsEnabled),
                         targetOffsetY = { it }
-                    ) + fadeOut(tween(110)),
+                    ) + fadeOut(LyraMotion.calmTween(120, animationsEnabled)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)

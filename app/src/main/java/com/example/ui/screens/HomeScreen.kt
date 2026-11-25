@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,7 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -125,6 +128,9 @@ fun HomeScreen(
     ) {
         LyraAmbientBackdrop()
 
+        val listState = rememberLazyListState()
+        val coroutineScope = rememberCoroutineScope()
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -132,6 +138,7 @@ fun HomeScreen(
                 .testTag("home_screen")
         ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -140,7 +147,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Top Bar with Capsule Controls
-            item {
+            item(key = "home_top_bar", contentType = "top_bar") {
                 LyraTopBar(
                     title = stringResource(R.string.home_title),
                     subtitle = stringResource(R.string.home_subtitle),
@@ -186,7 +193,7 @@ fun HomeScreen(
             }
 
             // Main AI Orb Hero Card + Capsule Stats
-            item {
+            item(key = "home_hero_card", contentType = "hero_card") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -279,7 +286,7 @@ fun HomeScreen(
             }
 
             // Quick Actions Capsule Row
-            item {
+            item(key = "home_quick_actions", contentType = "quick_actions") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -318,7 +325,7 @@ fun HomeScreen(
             }
 
             // Assistant Status Capsule Card
-            item {
+            item(key = "home_assistant_status", contentType = "status_card") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -380,7 +387,7 @@ fun HomeScreen(
             }
 
             // Lyra AI Voicemail Inbox Capsule Card
-            item {
+            item(key = "home_voicemail_card", contentType = "feature_card") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -444,8 +451,10 @@ fun HomeScreen(
             }
 
             // Scheduled Automatic Calls Capsule Card
-            item {
-                val pendingScheduledCount = scheduledCalls.count { it.status == "PENDING" }
+            item(key = "home_scheduled_calls_card", contentType = "feature_card") {
+                val pendingScheduledCount = remember(scheduledCalls) {
+                    scheduledCalls.count { it.status == "PENDING" }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -509,7 +518,7 @@ fun HomeScreen(
             }
 
             // Permission & Background Readiness Card
-            item {
+            item(key = "home_permissions_card", contentType = "permissions_card") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -561,7 +570,7 @@ fun HomeScreen(
             }
 
             // Interactive Call Simulator Card
-            item {
+            item(key = "home_call_simulator_card", contentType = "simulator_card") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -654,7 +663,12 @@ fun HomeScreen(
         LyraBottomNavBar(
             currentRoute = LyraDestinations.HOME,
             onNavigate = onNavigateTab,
-            unreadMissedCount = unreadMissedCount
+            unreadMissedCount = unreadMissedCount,
+            onReselectTab = {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(0)
+                }
+            }
         )
     }
     }

@@ -30,8 +30,10 @@ import com.example.service.NotificationHelper
 import com.example.ui.screens.ActiveCallScreen
 import com.example.ui.screens.IncomingCallScreen
 import com.example.ui.screens.VoicemailScreen
+import com.example.ui.theme.LyraMotion
 import com.example.ui.theme.LyraTheme
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.rememberAnimationsEnabled
 import com.example.ui.viewmodel.LyraMainViewModel
 import com.example.utils.configureAppCheck
 
@@ -94,6 +96,7 @@ class CallActivity : ComponentActivity() {
                 }
             }
 
+            val animationsEnabled = rememberAnimationsEnabled()
             MyApplicationTheme(appThemeStyle = appTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -105,7 +108,8 @@ class CallActivity : ComponentActivity() {
                             else -> liveCallState
                         },
                         transitionSpec = {
-                            fadeIn(tween(150)) togetherWith fadeOut(tween(110))
+                            fadeIn(LyraMotion.calmTween(160, animationsEnabled)) togetherWith
+                                fadeOut(LyraMotion.calmTween(120, animationsEnabled))
                         },
                         label = "call_activity_state_transition"
                     ) { screenState ->
@@ -152,6 +156,9 @@ class CallActivity : ComponentActivity() {
                                     onCancelCall = {
                                         viewModel.resetCallState()
                                         finishCallActivity()
+                                    },
+                                    onNavigateBackToApp = {
+                                        returnToMainAppKeepingCallAlive()
                                     }
                                 )
                             }
@@ -195,12 +202,16 @@ class CallActivity : ComponentActivity() {
             "ACTION_INCOMING_CALL" -> {
                 CallStateManager.setFullScreenIncomingUiVisible(true)
             }
-            "ACTION_OUTGOING_CALL" -> {
-                // Outgoing or picked-up call displays inside CallActivity above lock screen without dismissing keyguard.
+            NotificationHelper.ACTION_RETURN_TO_CALL,
+            "ACTION_OUTGOING_CALL",
+            "ACTION_VOICEMAIL" -> {
+                // Outgoing, resumed, or picked-up call displays inside CallActivity above lock screen without dismissing keyguard.
                 CallStateManager.setFullScreenIncomingUiVisible(false)
+                CallStateManager.setUserMinimizedCallUi(false)
             }
             "ACTION_ACCEPT_CALL" -> {
                 CallStateManager.setFullScreenIncomingUiVisible(false)
+                CallStateManager.setUserMinimizedCallUi(false)
                 viewModel.acceptCall()
             }
             "ACTION_DECLINE_CALL" -> {
@@ -210,6 +221,17 @@ class CallActivity : ComponentActivity() {
                 finishCallActivity()
             }
         }
+    }
+
+    internal fun returnToMainAppKeepingCallAlive() {
+        CallStateManager.setUserMinimizedCallUi(true)
+        val mainIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        }
+        runCatching { startActivity(mainIntent) }
+        finishCallActivity()
     }
 
     private fun configureLockScreenWindow() {

@@ -119,7 +119,9 @@ import com.example.ui.components.DashboardHeroGraphic
 import com.example.ui.components.liquidGlassPlate
 import com.example.ui.theme.AppThemeStyle
 import com.example.ui.theme.LocalInsideGlassSurface
+import com.example.ui.theme.LyraMotion
 import com.example.ui.theme.LyraTheme
+import com.example.ui.theme.rememberAnimationsEnabled
 import com.example.ui.theme.themeColorsFor
 import com.example.ui.viewmodel.PermissionsState
 import com.example.utils.MediaCropTransform
@@ -142,9 +144,10 @@ fun ExpandableSettingsModule(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = LyraTheme.colors
+    val animationsEnabled = rememberAnimationsEnabled()
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        animationSpec = LyraMotion.calmTween(190, animationsEnabled),
         label = "module_chevron_$moduleKey"
     )
     val borderColor = if (expanded) {
@@ -246,8 +249,10 @@ fun ExpandableSettingsModule(
 
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(tween(200, easing = FastOutSlowInEasing)) + fadeIn(tween(160)),
-                exit = shrinkVertically(tween(170, easing = FastOutSlowInEasing)) + fadeOut(tween(120))
+                enter = expandVertically(LyraMotion.calmTween(210, animationsEnabled)) +
+                    fadeIn(LyraMotion.calmTween(170, animationsEnabled)),
+                exit = shrinkVertically(LyraMotion.calmTween(180, animationsEnabled)) +
+                    fadeOut(LyraMotion.calmTween(130, animationsEnabled))
             ) {
                 CompositionLocalProvider(LocalInsideGlassSurface provides true) {
                     Column(

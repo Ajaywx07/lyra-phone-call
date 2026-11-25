@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -124,7 +125,9 @@ fun CallRecordingsScreen(
             if (recordings.isEmpty()) {
                 EmptyRecordingsPlaceholder()
             } else {
+                val recordingsListState = rememberLazyListState()
                 LazyColumn(
+                    state = recordingsListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag("call_recordings_list"),
@@ -133,7 +136,8 @@ fun CallRecordingsScreen(
                 ) {
                     items(
                         items = recordings,
-                        key = { it.id }
+                        key = { it.id },
+                        contentType = { "call_recording_card" }
                     ) { recording ->
                         CallRecordingItemCard(
                             recording = recording,

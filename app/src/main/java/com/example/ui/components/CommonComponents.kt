@@ -552,10 +552,12 @@ fun LyraContactAvatar(
     val resolvedAccent = accentColor ?: when {
         isOwner -> colors.primary
         isPriority -> AmberPriority
-        else -> {
-            val palette = listOf(colors.primary, colors.secondary, EmeraldAccept, Color(0xFF0284C7), AmberPriority)
-            val idx = kotlin.math.abs(name.hashCode()) % palette.size
-            palette[idx]
+        else -> when (kotlin.math.abs(name.hashCode()) % 5) {
+            0 -> colors.primary
+            1 -> colors.secondary
+            2 -> EmeraldAccept
+            3 -> Color(0xFF0284C7)
+            else -> AmberPriority
         }
     }
 

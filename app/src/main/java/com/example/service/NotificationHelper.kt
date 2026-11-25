@@ -54,6 +54,7 @@ object NotificationHelper {
     const val NOTIFICATION_ID_MISSED_CALL = 1005
 
     const val ACTION_OPEN_RECENTS = "com.ajay.lyra.action.OPEN_RECENTS"
+    const val ACTION_RETURN_TO_CALL = "com.ajay.lyra.action.RETURN_TO_CALL"
     const val EXTRA_NAVIGATE_ROUTE = "lyra_navigate_route"
 
     private val avatarBitmapCache = LruCache<String, Bitmap>(8)
@@ -337,7 +338,8 @@ object NotificationHelper {
         isMuted: Boolean,
         isSpeakerOn: Boolean,
         showCallerPhoto: Boolean = true,
-        useFullScreenIntent: Boolean = false
+        useFullScreenIntent: Boolean = false,
+        isHold: Boolean = false
     ): Notification {
         createNotificationChannels(context)
 
@@ -349,7 +351,7 @@ object NotificationHelper {
         val callerPerson = buildPerson(context, displayCaller, includePhoto = showCallerPhoto)
 
         val contentIntent = Intent(context, CallActivity::class.java).apply {
-            action = "ACTION_OUTGOING_CALL"
+            action = ACTION_RETURN_TO_CALL
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP or
                 Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
@@ -395,7 +397,13 @@ object NotificationHelper {
             CallStateEnum.DIALING -> "Dialing ${displayCaller.formattedNumber}..."
             CallStateEnum.VOICEMAIL -> "Lyra Voicemail Screening • Active"
             else -> buildString {
+                if (isHold) {
+                    append("On Hold • ")
+                }
                 append(displayCaller.formattedNumber.ifBlank { "Ongoing call" })
+                if (!isHold && displayCaller.formattedNumber.isNotBlank()) {
+                    append(" • Ongoing")
+                }
                 if (isMuted) append(" • Muted")
                 if (isSpeakerOn) append(" • Speaker")
             }
